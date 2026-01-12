@@ -1,0 +1,11 @@
+# Root level dockerignore
+.git
+.gitignore
+.env
+.env.*
+*.md
+.vscode
+.idea
+__pycache__
+*.pyc
+node_modules

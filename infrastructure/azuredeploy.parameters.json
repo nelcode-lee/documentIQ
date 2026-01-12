@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "applicationName": {
+      "value": "rag-system"
+    },
+    "location": {
+      "value": "[resourceGroup().location]"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "openAiSku": {
+      "value": "S0"
+    },
+    "openAiDeploymentName": {
+      "value": "gpt-4"
+    },
+    "openAiEmbeddingDeployment": {
+      "value": "text-embedding-ada-002"
+    },
+    "searchSku": {
+      "value": "basic"
+    },
+    "enableApplicationInsights": {
+      "value": true
+    }
+  }
+}
