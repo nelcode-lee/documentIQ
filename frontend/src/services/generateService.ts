@@ -16,6 +16,32 @@ export const generateService = {
   },
 
   /**
+   * Download a generated document file
+   */
+  async downloadDocument(documentId: string): Promise<void> {
+    try {
+      const response = await apiClient.get<{ downloadUrl: string }>(
+        `/api/generate/download/${documentId}`
+      );
+
+      if (response.data.downloadUrl) {
+        // Create a temporary link and trigger download
+        const link = document.createElement('a');
+        link.href = response.data.downloadUrl;
+        link.download = `document-${documentId}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error('Download URL not available');
+      }
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      throw new Error('Failed to download document');
+    }
+  },
+
+  /**
    * Generate a risk assessment specifically
    */
   async generateRiskAssessment(request: DocumentGenerationRequest): Promise<DocumentGenerationResponse> {

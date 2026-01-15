@@ -3,6 +3,19 @@
 import apiClient from './api';
 import type { ChatRequest, ChatResponse } from '../types';
 
+export interface QuickRatingRequest {
+  message_id: string;
+  conversation_id: string;
+  rating: number;
+  feedback?: string;
+}
+
+export interface RatingResponse {
+  status: string;
+  message: string;
+  rating_id?: string;
+}
+
 export const chatService = {
   /**
    * Send a chat message to the backend
@@ -62,5 +75,13 @@ export const chatService = {
         }
       }
     }
+  },
+
+  /**
+   * Submit a quick 1-5 star rating
+   */
+  async submitQuickRating(request: QuickRatingRequest): Promise<RatingResponse> {
+    const response = await apiClient.post<RatingResponse>('/api/chat/rating/quick', request);
+    return response.data;
   },
 };

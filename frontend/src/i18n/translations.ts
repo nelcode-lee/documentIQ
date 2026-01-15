@@ -97,7 +97,7 @@ export interface Translations {
 export const translations: Record<Language, Translations> = {
   en: {
     chat: 'Chat',
-    documents: 'Documents',
+    documents: 'Library',
     upload: 'Upload',
     generate: 'Generate',
     analytics: 'Analytics',
@@ -115,7 +115,7 @@ export const translations: Record<Language, Translations> = {
     clearChat: 'Clear Chat',
     popularQuestions: 'Popular Questions',
     mostPopularQuestions: 'Most Popular Questions',
-    poweredBy: 'Powered by DocumentIQ',
+    poweredBy: 'Powered By Cranswick Group IT',
     language: 'Language',
     defaultQuestions: [
       'What are the safety requirements for working at height?',
@@ -188,7 +188,7 @@ export const translations: Record<Language, Translations> = {
   
   pl: {
     chat: 'Czat',
-    documents: 'Dokumenty',
+    documents: 'Biblioteka',
     upload: 'Prześlij',
     generate: 'Generuj',
     analytics: 'Analityka',
@@ -279,7 +279,7 @@ export const translations: Record<Language, Translations> = {
   
   ro: {
     chat: 'Chat',
-    documents: 'Documente',
+    documents: 'Biblioteca',
     upload: 'Încărcare',
     generate: 'Generare',
     analytics: 'Analiză',

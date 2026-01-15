@@ -2,13 +2,16 @@
 
 import type { ChatMessage as ChatMessageType } from '../types';
 import { Copy, FileText } from 'lucide-react';
+import ChatRating from './ChatRating';
 
 interface ChatMessageProps {
   message: ChatMessageType;
+  messageId?: string;
+  conversationId?: string;
   onCopy?: (content: string) => void;
 }
 
-const ChatMessage = ({ message, onCopy }: ChatMessageProps) => {
+const ChatMessage = ({ message, messageId, conversationId, onCopy }: ChatMessageProps) => {
   const isUser = message.role === 'user';
 
   const handleCopy = () => {
@@ -30,6 +33,14 @@ const ChatMessage = ({ message, onCopy }: ChatMessageProps) => {
       >
         {/* Message content */}
         <div className="whitespace-pre-wrap break-words text-sm sm:text-base">{message.content}</div>
+
+        {/* Rating component for assistant messages */}
+        {!isUser && messageId && conversationId && (
+          <ChatRating
+            messageId={messageId}
+            conversationId={conversationId}
+          />
+        )}
 
         {/* Sources (for assistant messages) */}
         {!isUser && message.sources && message.sources.length > 0 && (

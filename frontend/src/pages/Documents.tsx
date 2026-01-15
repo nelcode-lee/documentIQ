@@ -1,13 +1,13 @@
 /** Document management page. */
 
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  FileText, 
-  Search, 
-  Filter, 
-  Eye, 
-  Trash2, 
-  Link2, 
+import {
+  FileText,
+  Search,
+  Filter,
+  Eye,
+  Trash2,
+  Link2,
   Plus,
   Upload,
   FileCheck,
@@ -19,7 +19,8 @@ import {
   User,
   FileType,
   Edit2,
-  Save
+  Save,
+  Download
 } from 'lucide-react';
 import type { Document, DocumentLayer } from '../types';
 import { documentService } from '../services/documentService';
@@ -39,6 +40,8 @@ const Documents = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [linkingDocId, setLinkingDocId] = useState<string | null>(null);
+  const [sharePointUrl, setSharePointUrl] = useState('');
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -184,8 +187,60 @@ const Documents = () => {
     }
   };
 
-  const handleLinkDocuments = (_docId: string) => {
+  const handleLinkDocuments = (docId: string) => {
+    setLinkingDocId(docId);
     setShowLinkDialog(true);
+    // Pre-populate SharePoint URL if document already has one
+    const doc = documents.find(d => d.id === docId);
+    setSharePointUrl(doc?.sharePointUrl || '');
+  };
+
+  const handleSaveSharePointLink = async () => {
+    if (!linkingDocId || !sharePointUrl.trim()) {
+      alert('Please enter a valid SharePoint URL');
+      return;
+    }
+
+    try {
+      await documentService.updateSharePointLink(linkingDocId, sharePointUrl.trim());
+      
+      // Update local state
+      setDocuments(documents.map(doc => 
+        doc.id === linkingDocId 
+          ? { ...doc, sharePointUrl: sharePointUrl.trim() }
+          : doc
+      ));
+      
+      setShowLinkDialog(false);
+      setLinkingDocId(null);
+      setSharePointUrl('');
+    } catch (error) {
+      console.error('Error saving SharePoint link:', error);
+      alert('Failed to save SharePoint link. Please try again.');
+    }
+  };
+
+  const handleViewDocument = (doc: Document) => {
+    // For now, just show an alert - in future could open a preview modal
+    if (doc.downloadUrl) {
+      window.open(doc.downloadUrl, '_blank');
+    } else {
+      alert('Document download URL not available');
+    }
+  };
+
+  const handleDownloadDocument = (doc: Document) => {
+    if (doc.downloadUrl) {
+      // Create a temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = doc.downloadUrl;
+      link.download = `${doc.title}.${doc.fileType || 'pdf'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert('Document download URL not available');
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -264,12 +319,49 @@ const Documents = () => {
             </p>
           </div>
           <Link
-            to="/documents/upload"
+            to="/upload"
             className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium self-start sm:self-auto"
           >
             <Plus size={18} />
             Upload Document
           </Link>
+        </div>
+      </div>
+
+      {/* Important Notes */}
+      <div className="space-y-4 mb-6">
+        {/* Document Quality Note */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <FileText size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold text-blue-900 mb-1">
+                Documents are key to response quality
+              </h3>
+              <p className="text-sm text-blue-800">
+                Effective document management is essential and required. High-quality, well-organized documents
+                ensure accurate, relevant, and contextually appropriate responses from the AI assistant.
+                Regular review and maintenance of your document library directly impacts response quality.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Layer Hierarchy Note */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <FileText size={20} className="text-green-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold text-green-900 mb-1">
+                Document Layer Hierarchy
+              </h3>
+              <div className="text-sm text-green-800 space-y-1">
+                <p><strong>Policy:</strong> High-level BRC requirements and standards</p>
+                <p><strong>Principle (Quality Manual):</strong> The bridge layer - explains "How do we prove we meet each policy clause?" Defines consistent expectations across all functions (Technical, H&S, Environment, Operations, HR). Links BRC requirements to practical SOPs.</p>
+                <p><strong>SOP:</strong> Practical step-by-step procedures for implementation</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -491,11 +583,46 @@ const Documents = () => {
                 </div>
               )}
 
+              {/* SharePoint Link Indicator */}
+              {doc.sharePointUrl && (
+                <div className="mb-4 p-2 bg-green-50 rounded text-xs">
+                  <a
+                    href={doc.sharePointUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-700 hover:text-green-900 flex items-center gap-1"
+                  >
+                    <Link2 size={12} />
+                    <span className="underline">Open in SharePoint</span>
+                  </a>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="mt-auto pt-4 border-t border-gray-200 flex items-center gap-2">
+                {doc.downloadUrl && (
+                  <>
+                    <button
+                      onClick={() => handleViewDocument(doc)}
+                      className="flex items-center gap-1 px-2 py-1.5 text-xs sm:text-sm text-green-600 hover:bg-green-50 rounded transition-colors flex-1 justify-center"
+                      title="View document"
+                    >
+                      <Eye size={14} />
+                      <span className="hidden sm:inline">View</span>
+                    </button>
+                    <button
+                      onClick={() => handleDownloadDocument(doc)}
+                      className="flex items-center gap-1 px-2 py-1.5 text-xs sm:text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors flex-1 justify-center"
+                      title="Download document"
+                    >
+                      <Download size={14} />
+                      <span className="hidden sm:inline">Download</span>
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => handleEdit(doc)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors flex-1 justify-center"
+                  className="flex items-center gap-1 px-2 py-1.5 text-xs sm:text-sm text-gray-600 hover:bg-gray-50 rounded transition-colors flex-1 justify-center"
                   title="Edit document"
                 >
                   <Edit2 size={14} />
@@ -572,9 +699,11 @@ const Documents = () => {
                   <option value="principle">Principle (Quality Manual)</option>
                   <option value="sop">SOP (Standard Operating Procedure)</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Classify document by layer: Policy (high-level requirements), Principle (how to meet requirements), or SOP (practical steps)
-                </p>
+                <div className="text-xs text-gray-600 mt-1 space-y-1">
+                  <p><strong>Policy:</strong> High-level BRC requirements and standards</p>
+                  <p><strong>Principle:</strong> Bridge layer - explains "How do we prove we meet each policy clause?" Defines consistent expectations across functions (Technical, H&S, Environment, Operations, HR)</p>
+                  <p><strong>SOP:</strong> Practical step-by-step procedures</p>
+                </div>
               </div>
 
               {/* Category */}
@@ -737,36 +866,69 @@ const Documents = () => {
         </div>
       )}
 
-      {/* Link Documents Dialog */}
-      {showLinkDialog && (
+      {/* Link SharePoint Dialog */}
+      {showLinkDialog && linkingDocId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Link Documents</h2>
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Link2 size={24} className="text-blue-600" />
+                Link to SharePoint
+              </h2>
               <p className="text-sm text-gray-600 mt-1">
-                Select documents to link with this document
+                Link this document to its source file in SharePoint
               </p>
             </div>
             <div className="p-6">
-              {/* Link dialog content would go here */}
-              <p className="text-gray-600 mb-4">
-                This feature will allow you to link related documents together for easier retrieval.
-              </p>
-              <div className="flex justify-end gap-3">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    SharePoint File URL *
+                  </label>
+                  <input
+                    type="url"
+                    value={sharePointUrl}
+                    onChange={(e) => setSharePointUrl(e.target.value)}
+                    placeholder="https://yourcompany.sharepoint.com/sites/..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Paste the full SharePoint file URL. This will create a link to the source document.
+                  </p>
+                </div>
+
+                {documents.find(d => d.id === linkingDocId)?.sharePointUrl && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs font-medium text-blue-900 mb-1">Current SharePoint Link:</p>
+                    <a
+                      href={documents.find(d => d.id === linkingDocId)?.sharePointUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:text-blue-800 break-all"
+                    >
+                      {documents.find(d => d.id === linkingDocId)?.sharePointUrl}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setShowLinkDialog(false)}
+                  onClick={() => {
+                    setShowLinkDialog(false);
+                    setLinkingDocId(null);
+                    setSharePointUrl('');
+                  }}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    // Handle linking logic here
-                    setShowLinkDialog(false);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={handleSaveSharePointLink}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                 >
-                  Link Documents
+                  <Link2 size={16} />
+                  Save SharePoint Link
                 </button>
               </div>
             </div>

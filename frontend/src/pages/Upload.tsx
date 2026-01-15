@@ -299,9 +299,11 @@ const Upload = () => {
                       <option value="principle">Principle (Quality Manual)</option>
                       <option value="sop">SOP (Standard Operating Procedure)</option>
                     </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Classify document by layer: Policy (high-level requirements), Principle (how to meet requirements), or SOP (practical steps)
-                    </p>
+                    <div className="text-xs text-gray-600 mt-1 space-y-1">
+                      <p><strong>Policy:</strong> High-level BRC requirements and standards</p>
+                      <p><strong>Principle:</strong> Bridge layer - explains "How do we prove we meet each policy clause?" Defines consistent expectations across functions (Technical, H&S, Environment, Operations, HR)</p>
+                      <p><strong>SOP:</strong> Practical step-by-step procedures</p>
+                    </div>
                   </div>
 
                   <div>

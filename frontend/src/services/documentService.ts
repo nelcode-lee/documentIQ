@@ -136,4 +136,13 @@ export const documentService = {
     });
     return response.data;
   },
+
+  /**
+   * Update SharePoint link for a document
+   */
+  async updateSharePointLink(documentId: string, sharePointUrl: string): Promise<void> {
+    await apiClient.put(`/api/documents/${documentId}/sharepoint`, {
+      sharePointUrl,
+    });
+  },
 };

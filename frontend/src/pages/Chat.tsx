@@ -42,53 +42,59 @@ const Chat = () => {
       try {
         console.log('[Chat] Loading top queries from analytics...');
         const topQueries = await analyticsService.getTopQueries(5, 30);
-        console.log('[Chat] Top queries received:', topQueries);
+        console.log('[Chat] Top queries received:', JSON.stringify(topQueries, null, 2));
         
         // Handle different response formats
         let queries: string[] = [];
-        if (Array.isArray(topQueries)) {
+        if (Array.isArray(topQueries) && topQueries.length > 0) {
           // Extract just the query text from objects
           queries = topQueries.map((q: any) => {
             if (typeof q === 'string') {
               return q;
             } else if (q && typeof q === 'object') {
-              return q.query || q.text || q.query_text || '';
+              // Backend returns: { query: string, count: number, average_response_time_ms: number }
+              const queryText = q.query || q.text || q.query_text || q.message || '';
+              console.log('[Chat] Extracted query from object:', { original: q, extracted: queryText });
+              return queryText;
             }
             return '';
-          }).filter((q: string) => q.length > 0);
+          }).filter((q: string) => q && q.trim().length > 0);
         }
         
-        console.log('[Chat] Extracted queries:', queries);
+        console.log('[Chat] Extracted queries (after filtering):', queries);
         
         if (queries.length > 0) {
           setTopSearchedTerms(queries);
-          console.log('[Chat] Set top searched terms:', queries);
+          console.log('[Chat] ✅ Set top searched terms:', queries);
         } else {
           // Use translated defaults if empty
-          console.log('[Chat] No queries found, using default questions');
+          console.warn('[Chat] ⚠️ No queries found in analytics, using default questions');
           setTopSearchedTerms(t.defaultQuestions);
         }
       } catch (error) {
         // Log error details for debugging
-        console.error('[Chat] Error loading top queries:', error);
+        console.error('[Chat] ❌ Error loading top queries:', error);
+        if (error instanceof Error) {
+          console.error('[Chat] Error details:', error.message, error.stack);
+        }
         console.warn('[Chat] Using default questions due to error');
         setTopSearchedTerms(t.defaultQuestions);
       }
     };
 
-    // Only try to load if backend is available (give it time to start)
-    const timeoutId = setTimeout(() => {
-      loadTopQueries();
-    }, 2000); // Wait 2 seconds before trying
-
-    return () => clearTimeout(timeoutId);
+    // Load immediately - backend should be running
+    loadTopQueries();
   }, [selectedLanguage, t]); // Reload when language or translations change
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    // Generate unique IDs for rating system
+    const userMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const assistantMessageId = `msg-${Date.now() + 1}-${Math.random().toString(36).substr(2, 9)}`;
+
     const userMessage: ChatMessageType = {
-      id: Date.now().toString(),
+      id: userMessageId,
       role: 'user',
       content: input.trim(),
       timestamp: new Date(),
@@ -101,7 +107,7 @@ const Chat = () => {
            try {
              // Debug: log the selected language
              console.log('[DEBUG] Sending message with language:', selectedLanguage);
-             
+
              // For now, use non-streaming API (you can switch to streaming later)
              const response = await chatService.sendMessage({
                message: userMessage.content,
@@ -110,46 +116,60 @@ const Chat = () => {
              });
 
       const assistantMessage: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
+        id: assistantMessageId,
         role: 'assistant',
         content: response.response,
         sources: response.sources,
         timestamp: new Date(),
       };
 
+      // Update conversation ID if this is the first message
+      if (response.conversation_id && !conversationId) {
+        setConversationId(response.conversation_id);
+      }
+
       setMessages((prev) => [...prev, assistantMessage]);
       setConversationId(response.conversation_id);
       
-      // Refresh top queries after sending a message
-      try {
-        const topQueries = await analyticsService.getTopQueries(5, 30);
-        // Handle different response formats
-        let queries: string[] = [];
-        if (Array.isArray(topQueries)) {
-          queries = topQueries.map((q: any) => {
-            if (typeof q === 'string') {
-              return q;
-            } else if (q && typeof q === 'object') {
-              return q.query || q.text || q.query_text || '';
+      // Refresh top queries after sending a message (with delay to let analytics update)
+      setTimeout(async () => {
+        try {
+          console.log('[Chat] Refreshing top queries after message...');
+          const topQueries = await analyticsService.getTopQueries(5, 30);
+          console.log('[Chat] Refreshed top queries:', topQueries);
+          
+          // Handle different response formats
+          let queries: string[] = [];
+          if (Array.isArray(topQueries) && topQueries.length > 0) {
+            queries = topQueries.map((q: any) => {
+              if (typeof q === 'string') {
+                return q;
+              } else if (q && typeof q === 'object') {
+                // Backend returns: { query: string, count: number, average_response_time_ms: number }
+                return q.query || q.text || q.query_text || q.message || '';
+              }
+              return '';
+            }).filter((q: string) => q && q.trim().length > 0);
+          }
+          
+          if (queries.length > 0) {
+            setTopSearchedTerms(queries);
+            console.log('[Chat] ✅ Updated top searched terms:', queries);
+          } else {
+            // Only fall back to defaults if we don't have any queries yet
+            if (topSearchedTerms.length === 0) {
+              setTopSearchedTerms(t.defaultQuestions);
             }
-            return '';
-          }).filter((q: string) => q.length > 0);
+          }
+        } catch (err) {
+          // Log error but don't disrupt chat flow
+          console.error('[Chat] Error refreshing top queries:', err);
+          // Keep existing queries or use defaults
+          if (topSearchedTerms.length === 0) {
+            setTopSearchedTerms(t.defaultQuestions);
+          }
         }
-        
-        if (queries.length > 0) {
-          setTopSearchedTerms(queries);
-        } else {
-          // Use translated defaults if no analytics data
-          setTopSearchedTerms(t.defaultQuestions);
-        }
-      } catch (err) {
-        // Log error but don't disrupt chat flow
-        console.error('[Chat] Error refreshing top queries:', err);
-        // Keep existing queries or use defaults
-        if (topSearchedTerms.length === 0) {
-          setTopSearchedTerms(t.defaultQuestions);
-        }
-      }
+      }, 1000); // Wait 1 second for analytics to be processed
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage: ChatMessageType = {
@@ -204,6 +224,12 @@ const Chat = () => {
     console.log('[Chat] Top searched terms updated:', topSearchedTerms);
     console.log('[Chat] Popular questions to display:', popularQuestions);
   }, [topSearchedTerms, popularQuestions]);
+
+  // Helper to truncate long questions for display
+  const truncateQuestion = (text: string, maxLength: number = 60) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength).trim() + '...';
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] sm:h-[calc(100vh-12rem)] max-w-6xl mx-auto">
@@ -272,14 +298,14 @@ const Chat = () => {
               {topSearchedTerms.length > 0 ? t.mostPopularQuestions : t.popularQuestions}
             </h3>
             <div className="flex flex-wrap gap-2">
-              {popularQuestions.map((term, index) => (
+              {popularQuestions.slice(0, 5).map((term, index) => (
                 <button
                   key={index}
                   onClick={() => handleQuickSelect(term)}
-                  className="px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs sm:text-sm text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left max-w-full sm:max-w-md truncate sm:whitespace-normal sm:overflow-visible"
+                  className="px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs sm:text-sm text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
                   title={term}
                 >
-                  {term}
+                  {truncateQuestion(term, 50)}
                 </button>
               ))}
             </div>
@@ -317,6 +343,8 @@ const Chat = () => {
               <ChatMessage
                 key={message.id}
                 message={message}
+                messageId={message.id}
+                conversationId={conversationId}
                 onCopy={handleCopy}
               />
             ))}

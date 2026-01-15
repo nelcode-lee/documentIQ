@@ -9,32 +9,66 @@ from app.models.analytics import (
     AnalyticsSummary,
     DailyMetrics
 )
+from app.services.conversation_service import conversation_service
+from app.services.cache_service import cache_service
 import uuid
+import time
 
 
 class AnalyticsService:
-    """Service to track and analyze usage metrics."""
-    
+    """Service to track and analyze usage metrics with blob storage persistence."""
+
     # Singleton instance
     _instance = None
     
+    # Cache TTL in seconds (60 seconds = analytics refresh every minute max)
+    CACHE_TTL = 60
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(AnalyticsService, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         """Initialize analytics storage."""
         if self._initialized:
             return
-        
-        # In-memory storage (can be replaced with database later)
-        self.queries: List[QueryAnalytics] = []
-        self.document_access: Dict[str, int] = defaultdict(int)  # document_id -> count
-        self.document_last_access: Dict[str, datetime] = {}  # document_id -> last access time
-        self.document_chunks_retrieved: Dict[str, int] = defaultdict(int)  # document_id -> chunks
+
+        # Analytics data is now stored in blob storage via conversation_service
+        # Keep some in-memory caches for performance
+        self._query_cache: List[QueryAnalytics] = []
+        self._cache_size_limit = 1000  # Keep last 1000 queries in memory
+        self._analytics_cache: Dict[str, Any] = {}  # In-memory analytics cache
+        self._cache_timestamps: Dict[str, float] = {}  # Cache timestamps
         self._initialized = True
+    
+    def _get_cached(self, key: str) -> Optional[Any]:
+        """Get cached analytics data if still valid."""
+        if key in self._analytics_cache and key in self._cache_timestamps:
+            if time.time() - self._cache_timestamps[key] < self.CACHE_TTL:
+                return self._analytics_cache[key]
+        return None
+    
+    def _set_cached(self, key: str, value: Any):
+        """Cache analytics data."""
+        self._analytics_cache[key] = value
+        self._cache_timestamps[key] = time.time()
+    
+    def _get_conversations_cached(self, days: int) -> tuple:
+        """Get conversations with caching - returns (all_conversations, recent_conversations)."""
+        cache_key = f"conversations_{days}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached
+        
+        conversations = conversation_service.list_conversations(limit=1000)
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        recent = [c for c in conversations if c.updated_at >= cutoff_date]
+        
+        result = (conversations, recent, cutoff_date)
+        self._set_cached(cache_key, result)
+        return result
         
     def track_query(
         self,
@@ -45,18 +79,23 @@ class AnalyticsService:
     ) -> str:
         """
         Track a query event.
-        
+
+        Note: Analytics are now stored via conversation service in blob storage.
+        This method is kept for backward compatibility but primary tracking
+        is now done in the chat endpoint with conversation persistence.
+
         Args:
             query_text: The user's query
             response_time_ms: Response time in milliseconds
             sources_used: List of document titles used in response
             conversation_id: Optional conversation ID
-            
+
         Returns:
             Query ID
         """
         query_id = str(uuid.uuid4())
-        
+
+        # Keep in-memory cache for backward compatibility
         query_analytics = QueryAnalytics(
             query_id=query_id,
             query_text=query_text,
@@ -65,18 +104,12 @@ class AnalyticsService:
             sources_used=sources_used,
             conversation_id=conversation_id
         )
-        
-        self.queries.append(query_analytics)
-        
-        # Track document access
-        for source in sources_used:
-            # Try to find document ID from source (could be title or ID)
-            # For now, we'll track by title
-            self.document_access[source] += 1
-            self.document_last_access[source] = datetime.utcnow()
-            # Increment chunks retrieved (assuming 1 chunk per document per query)
-            self.document_chunks_retrieved[source] += 1
-        
+
+        # Maintain cache with size limit
+        self._query_cache.append(query_analytics)
+        if len(self._query_cache) > self._cache_size_limit:
+            self._query_cache.pop(0)  # Remove oldest
+
         return query_id
     
     def get_query_volume(
@@ -85,39 +118,52 @@ class AnalyticsService:
     ) -> Dict[str, int]:
         """
         Get query volume for different time periods.
-        
+
         Args:
             days: Number of days to look back
-            
+
         Returns:
             Dictionary with daily, weekly, monthly counts
         """
+        # Check cache first
+        cache_key = f"query_volume_{days}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached
+        
         now = datetime.utcnow()
-        cutoff_date = now - timedelta(days=days)
-        
-        # Filter queries within time range
-        recent_queries = [
-            q for q in self.queries
-            if q.timestamp >= cutoff_date
+        conversations, recent_conversations, cutoff_date = self._get_conversations_cached(days)
+
+        # Calculate query volume from conversations
+        total_queries = sum(c.total_queries for c in conversations)
+        recent_queries_total = sum(c.total_queries for c in recent_conversations)
+
+        # Daily (today)
+        today_conversations = [
+            c for c in recent_conversations
+            if c.updated_at.date() == now.date()
         ]
-        
-        # Daily (last 7 days)
-        daily_cutoff = now - timedelta(days=7)
-        daily_queries = [q for q in recent_queries if q.timestamp >= daily_cutoff]
-        
-        # Weekly (last 30 days, grouped by week)
-        weekly_cutoff = now - timedelta(days=30)
-        weekly_queries = [q for q in recent_queries if q.timestamp >= weekly_cutoff]
-        
+        daily_queries = sum(c.total_queries for c in today_conversations)
+
+        # Weekly (last 7 days)
+        weekly_cutoff = now - timedelta(days=7)
+        weekly_conversations = [
+            c for c in conversations
+            if c.updated_at >= weekly_cutoff
+        ]
+        weekly_queries = sum(c.total_queries for c in weekly_conversations)
+
         # Monthly (all in range)
-        monthly_queries = recent_queries
-        
-        return {
-            "daily": len([q for q in daily_queries if q.timestamp.date() == now.date()]),
-            "weekly": len(weekly_queries),
-            "monthly": len(monthly_queries),
-            "total": len(self.queries)
+        monthly_queries = recent_queries_total
+
+        result = {
+            "daily": daily_queries,
+            "weekly": weekly_queries,
+            "monthly": monthly_queries,
+            "total": total_queries
         }
+        self._set_cached(cache_key, result)
+        return result
     
     def get_top_queries(
         self,
@@ -126,40 +172,84 @@ class AnalyticsService:
     ) -> List[Dict[str, Any]]:
         """
         Get most frequent queries.
-        
+
         Args:
             limit: Number of top queries to return
             days: Number of days to look back
-            
+
         Returns:
             List of query dictionaries with count
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        recent_queries = [
-            q.query_text for q in self.queries
-            if q.timestamp >= cutoff_date
-        ]
+        # Check cache first (use max limit for cache key to reuse for smaller limits)
+        cache_key = f"top_queries_{days}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached[:limit]  # Return only requested limit
         
-        # Count query frequency
-        query_counts = Counter(recent_queries)
+        from collections import Counter
+
+        # Get conversations and messages from blob storage
+        conversations, recent_conversations, cutoff_date = self._get_conversations_cached(days)
         
-        # Return top queries
-        top_queries = []
-        for query_text, count in query_counts.most_common(limit):
-            # Get average response time for this query
-            query_times = [
-                q.response_time_ms for q in self.queries
-                if q.query_text == query_text and q.timestamp >= cutoff_date
-            ]
-            avg_time = sum(query_times) / len(query_times) if query_times else 0
+        print(f"[ANALYTICS] get_top_queries: Found {len(conversations)} conversations, cutoff_date={cutoff_date}")
+
+        # Collect query texts and response times
+        query_data = {}
+        total_messages_found = 0
+        total_user_messages = 0
+        
+        for conversation in recent_conversations:
+            messages = conversation_service.get_conversation_messages(conversation.id)
+            total_messages_found += len(messages)
             
-            top_queries.append({
+            print(f"[ANALYTICS] Conversation {conversation.id}: {len(messages)} messages")
+            
+            # Pair user messages with their corresponding assistant responses
+            for i, message in enumerate(messages):
+                if message.role == "user" and message.timestamp >= cutoff_date:
+                    query_text = message.content.strip()
+                    total_user_messages += 1
+                    
+                    if not query_text:
+                        continue
+                    
+                    # Find the next assistant message for this query
+                    response_time = 0
+                    if i + 1 < len(messages) and messages[i + 1].role == "assistant":
+                        response_time = messages[i + 1].response_time_ms or 0
+
+                    if query_text not in query_data:
+                        query_data[query_text] = {"count": 0, "response_times": []}
+
+                    query_data[query_text]["count"] += 1
+                    if response_time > 0:
+                        query_data[query_text]["response_times"].append(response_time)
+
+        print(f"[ANALYTICS] Found {total_messages_found} total messages, {total_user_messages} user messages, {len(query_data)} unique queries")
+
+        # Process into top queries (cache more than needed)
+        all_top_queries = []
+        for query_text, data in sorted(
+            query_data.items(),
+            key=lambda x: x[1]["count"],
+            reverse=True
+        )[:20]:  # Cache top 20 for reuse
+            response_times = data["response_times"]
+            avg_time = sum(response_times) / len(response_times) if response_times else 0
+
+            all_top_queries.append({
                 "query": query_text,
-                "count": count,
+                "count": data["count"],
                 "average_response_time_ms": round(avg_time, 2)
             })
         
-        return top_queries
+        # Cache the result
+        self._set_cached(cache_key, all_top_queries)
+        
+        top_queries = all_top_queries[:limit]
+        print(f"[ANALYTICS] Returning {len(top_queries)} top queries: {[q['query'][:50] for q in top_queries]}")
+
+        return top_queries if top_queries else []
     
     def get_top_documents(
         self,
@@ -168,36 +258,48 @@ class AnalyticsService:
     ) -> List[DocumentAnalytics]:
         """
         Get most accessed documents.
-        
+
         Args:
             limit: Number of top documents to return
             days: Number of days to look back
-            
+
         Returns:
             List of DocumentAnalytics objects
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        # Check cache first
+        cache_key = f"top_documents_{days}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached[:limit]
         
-        # Filter queries in time range and extract document access
+        from collections import defaultdict
+
+        conversations, recent_conversations, cutoff_date = self._get_conversations_cached(days)
+
+        # Filter conversations in time range and extract document access
         document_access_counts = defaultdict(int)
         document_last_access = {}
         document_chunks = defaultdict(int)
-        
-        for query in self.queries:
-            if query.timestamp >= cutoff_date:
-                for source in query.sources_used:
-                    document_access_counts[source] += 1
-                    if source not in document_last_access or query.timestamp > document_last_access[source]:
-                        document_last_access[source] = query.timestamp
-                    document_chunks[source] += 1
-        
-        # Create DocumentAnalytics objects
-        top_documents = []
+
+        for conversation in recent_conversations:
+            messages = conversation_service.get_conversation_messages(conversation.id)
+            for message in messages:
+                if message.role == "assistant" and message.timestamp >= cutoff_date:
+                    if message.sources:
+                        for source in message.sources:
+                            document_access_counts[source] += 1
+                            if source not in document_last_access or message.timestamp > document_last_access[source]:
+                                document_last_access[source] = message.timestamp
+                            # Estimate chunks retrieved (could be improved)
+                            document_chunks[source] += 1
+
+        # Create DocumentAnalytics objects (cache more than needed)
+        all_documents = []
         for doc_title, count in sorted(
             document_access_counts.items(),
             key=lambda x: x[1],
             reverse=True
-        )[:limit]:
+        )[:20]:  # Cache top 20
             last_accessed_dt = document_last_access.get(doc_title)
             doc_analytics = DocumentAnalytics(
                 document_id=doc_title,  # Using title as ID for now
@@ -206,9 +308,10 @@ class AnalyticsService:
                 last_accessed=last_accessed_dt.isoformat() if last_accessed_dt else None,
                 total_chunks_retrieved=document_chunks.get(doc_title, 0)
             )
-            top_documents.append(doc_analytics)
-        
-        return top_documents
+            all_documents.append(doc_analytics)
+
+        self._set_cached(cache_key, all_documents)
+        return all_documents[:limit]
     
     def get_average_response_time(
         self,
@@ -216,24 +319,35 @@ class AnalyticsService:
     ) -> float:
         """
         Get average response time.
-        
+
         Args:
             days: Number of days to look back
-            
+
         Returns:
             Average response time in milliseconds
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        recent_queries = [
-            q for q in self.queries
-            if q.timestamp >= cutoff_date
-        ]
+        # Check cache first
+        cache_key = f"avg_response_time_{days}"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
         
-        if not recent_queries:
+        # Get conversations from cache
+        conversations, recent_conversations, cutoff_date = self._get_conversations_cached(days)
+
+        total_time = sum(c.total_response_time_ms for c in recent_conversations)
+        total_queries = sum(c.total_queries for c in recent_conversations)
+
+        print(f"[ANALYTICS] get_average_response_time: {len(recent_conversations)} conversations, {total_queries} queries, {total_time:.2f}ms total")
+
+        if total_queries == 0:
+            self._set_cached(cache_key, 0.0)
             return 0.0
-        
-        total_time = sum(q.response_time_ms for q in recent_queries)
-        return round(total_time / len(recent_queries), 2)
+
+        avg_time = round(total_time / total_queries, 2)
+        print(f"[ANALYTICS] Average response time: {avg_time}ms")
+        self._set_cached(cache_key, avg_time)
+        return avg_time
     
     def get_daily_metrics(
         self,
@@ -241,53 +355,71 @@ class AnalyticsService:
     ) -> List[DailyMetrics]:
         """
         Get daily metrics breakdown.
-        
+
         Args:
             days: Number of days to look back
-            
+
         Returns:
             List of DailyMetrics objects
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        recent_queries = [
-            q for q in self.queries
-            if q.timestamp >= cutoff_date
-        ]
+        # Check cache first
+        cache_key = f"daily_metrics_{days}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached
         
+        from collections import defaultdict
+
+        conversations, recent_conversations, cutoff_date = self._get_conversations_cached(days)
+
         # Group by date
         daily_data = defaultdict(lambda: {
-            "queries": [],
+            "query_count": 0,
             "conversations": set(),
-            "documents": set()
+            "documents": set(),
+            "response_times": []
         })
-        
-        for query in recent_queries:
-            date_key = query.timestamp.date().isoformat()
-            daily_data[date_key]["queries"].append(query)
-            if query.conversation_id:
-                daily_data[date_key]["conversations"].add(query.conversation_id)
-            daily_data[date_key]["documents"].update(query.sources_used)
-        
+
+        for conversation in recent_conversations:
+            # Count queries and collect response times from actual messages
+            messages = conversation_service.get_conversation_messages(conversation.id)
+            
+            # Group messages by their actual date (not conversation updated_at)
+            for message in messages:
+                if message.timestamp >= cutoff_date:
+                    date_key = message.timestamp.date().isoformat()
+                    
+                    if message.role == "user":
+                        daily_data[date_key]["query_count"] += 1
+                        daily_data[date_key]["conversations"].add(conversation.id)
+                    elif message.role == "assistant":
+                        daily_data[date_key]["conversations"].add(conversation.id)
+                        if message.response_time_ms and message.response_time_ms > 0:
+                            daily_data[date_key]["response_times"].append(message.response_time_ms)
+                        if message.sources:
+                            daily_data[date_key]["documents"].update(message.sources)
+
         # Convert to DailyMetrics
         daily_metrics = []
         for date_str in sorted(daily_data.keys()):
             data = daily_data[date_str]
-            queries = data["queries"]
-            
+            response_times = data["response_times"]
+
             avg_response_time = (
-                sum(q.response_time_ms for q in queries) / len(queries)
-                if queries else 0
+                sum(response_times) / len(response_times)
+                if response_times else 0
             )
-            
+
             metrics = DailyMetrics(
                 date=date_str,
-                query_count=len(queries),
+                query_count=data["query_count"],
                 unique_conversations=len(data["conversations"]),
                 average_response_time=round(avg_response_time, 2),
                 documents_accessed=list(data["documents"])
             )
             daily_metrics.append(metrics)
-        
+
+        self._set_cached(cache_key, daily_metrics)
         return daily_metrics
     
     def get_analytics_summary(
@@ -303,6 +435,13 @@ class AnalyticsService:
         Returns:
             AnalyticsSummary object
         """
+        # Check cache first for the complete summary
+        cache_key = f"analytics_summary_{days}"
+        cached = self._get_cached(cache_key)
+        if cached:
+            return cached
+        
+        # Individual methods will also use caching
         query_volume = self.get_query_volume(days)
         top_queries = self.get_top_queries(limit=10, days=days)
         top_documents = self.get_top_documents(limit=10, days=days)
@@ -310,7 +449,7 @@ class AnalyticsService:
         
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
-        return AnalyticsSummary(
+        summary = AnalyticsSummary(
             query_volume=query_volume,
             top_queries=top_queries,
             top_documents=top_documents,
@@ -321,3 +460,6 @@ class AnalyticsService:
                 "end": datetime.utcnow().isoformat()
             }
         )
+        
+        self._set_cached(cache_key, summary)
+        return summary

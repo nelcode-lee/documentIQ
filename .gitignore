@@ -53,6 +53,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+backend_startup.log
 
 # Testing
 .pytest_cache/
@@ -62,3 +63,8 @@ htmlcov/
 # Build outputs
 dist/
 build/
+frontend/dist/
+frontend/build/
+
+# Generated files
+generated_documents.json

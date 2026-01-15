@@ -7,11 +7,14 @@ import type {
   DocumentFormat, 
   DocumentGenerationRequest,
   RiskAssessmentData,
-  MethodStatementData
+  MethodStatementData,
+  PrincipleData,
+  DocumentLayer
 } from '../types';
 import { generateService } from '../services/generateService';
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string; description: string }[] = [
+  { value: 'principle', label: 'Principle (Quality Manual)', description: 'Bridge Policy and SOPs - explains how to prove compliance with policy clauses' },
   { value: 'risk-assessment', label: 'Risk Assessment', description: 'Identify hazards and assess risks with control measures' },
   { value: 'method-statement', label: 'Method Statement', description: 'Detailed procedure for carrying out work safely' },
   { value: 'safe-work-procedure', label: 'Safe Work Procedure', description: 'Step-by-step safe working instructions' },
@@ -54,6 +57,9 @@ const Generate = () => {
   const [author, setAuthor] = useState('');
   const [reviewDate, setReviewDate] = useState('');
   const [version, setVersion] = useState('1.0');
+  const [documentReference, setDocumentReference] = useState('');
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [layer, setLayer] = useState<DocumentLayer | ''>('');
   const [useStandards, setUseStandards] = useState(true);
   const [preview, setPreview] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -80,6 +86,28 @@ const Generate = () => {
     qualityChecks: [''],
     responsiblePersons: { author: '', reviewer: '', approver: '' },
     reviewDate: new Date().toISOString().split('T')[0],
+  });
+
+  // Principle specific fields
+  const [principleData, setPrincipleData] = useState<PrincipleData>({
+    brcClause: '',
+    clauseNumber: '',
+    intent: '',
+    riskOfNonCompliance: '',
+    coreCommitments: [''],
+    evidenceExpectations: [''],
+    crossFunctionalResponsibilities: [
+      { function: 'Technical', responsibility: '' },
+      { function: 'H&S', responsibility: '' },
+      { function: 'Environment', responsibility: '' },
+      { function: 'Operations', responsibility: '' },
+      { function: 'HR', responsibility: '' },
+    ],
+    decisionLogic: '',
+    rationale: '',
+    analyzeExistingSOPs: true,
+    linkedSOPs: [],
+    relatedPolicyDocuments: [],
   });
 
   const calculateRiskScore = (likelihood: string, severity: string): number => {
@@ -141,10 +169,47 @@ const Generate = () => {
       return;
     }
 
+    // Validate Principle-specific required fields
+    if (documentType === 'principle') {
+      if (!principleData.brcClause.trim()) {
+        alert('Please enter the BRC Clause or Policy Requirement');
+        return;
+      }
+      if (!principleData.intent.trim()) {
+        alert('Please enter the Intent of the Clause');
+        return;
+      }
+      if (!principleData.riskOfNonCompliance.trim()) {
+        alert('Please enter the Risk of Non-Compliance');
+        return;
+      }
+      if (principleData.coreCommitments.length === 0 || !principleData.coreCommitments[0].trim()) {
+        alert('Please add at least one Core Organisational Commitment');
+        return;
+      }
+      if (principleData.evidenceExpectations.length === 0 || !principleData.evidenceExpectations[0].trim()) {
+        alert('Please add at least one Evidence Expectation');
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setPreview('');
 
     try {
+      // Prepare Principle data - clean up empty values
+      let preparedPrincipleData = principleData;
+      if (documentType === 'principle') {
+        preparedPrincipleData = {
+          ...principleData,
+          coreCommitments: principleData.coreCommitments.filter(c => c.trim()),
+          evidenceExpectations: principleData.evidenceExpectations.filter(e => e.trim()),
+          crossFunctionalResponsibilities: principleData.crossFunctionalResponsibilities.filter(
+            r => r.function.trim() || r.responsibility.trim()
+          ),
+        };
+      }
+
       const request: DocumentGenerationRequest = {
         documentType,
         format,
@@ -156,8 +221,15 @@ const Generate = () => {
         author,
         reviewDate: reviewDate || undefined,
         version,
+        documentReference: documentReference || undefined,
+        issueDate: issueDate || undefined,
+        layer: documentType === 'principle' ? 'principle' : (layer || undefined),
         useStandards,
-        data: documentType === 'risk-assessment' ? riskData : methodData,
+        data: documentType === 'risk-assessment' 
+          ? riskData 
+          : documentType === 'principle' 
+          ? preparedPrincipleData
+          : methodData,
       };
 
       const response = await generateService.generateDocument(request);
@@ -171,18 +243,14 @@ const Generate = () => {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (generatedDocumentId) {
-      // In production, this would download the actual file
-      const blob = new Blob([preview], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${title || 'document'}.${format === 'markdown' ? 'md' : format}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      try {
+        await generateService.downloadDocument(generatedDocumentId);
+      } catch (error) {
+        console.error('Error downloading document:', error);
+        alert('Failed to download document. Please try again.');
+      }
     }
   };
 
@@ -194,6 +262,25 @@ const Generate = () => {
         <p className="text-gray-600 mt-2 text-sm sm:text-base">
           Create standardized documents using AI-powered templates
         </p>
+      </div>
+
+      {/* Layer Hierarchy Explanation */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-semibold text-blue-900 mb-2">Document Layer Hierarchy</h3>
+        <div className="text-sm text-blue-800 space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="font-medium">1. Policy (BRC Standards):</span>
+            <span>High-level requirements and standards from BRC</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="font-medium">2. Principle (Quality Manual):</span>
+            <span>The bridge layer - explains "How do we prove we meet each policy clause?" Defines consistent expectations across all functions (Technical, H&S, Environment, Operations, HR). Links BRC requirements to practical SOPs.</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="font-medium">3. SOP (Standard Operating Procedure):</span>
+            <span>Practical step-by-step procedures for implementation</span>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -210,7 +297,14 @@ const Generate = () => {
                 </label>
                 <select
                   value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value as DocumentType)}
+                  onChange={(e) => {
+                    const newType = e.target.value as DocumentType;
+                    setDocumentType(newType);
+                    // Auto-set layer to 'principle' when Principle document type is selected
+                    if (newType === 'principle') {
+                      setLayer('principle');
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                 >
                   {DOCUMENT_TYPES.map((type) => (
@@ -259,6 +353,39 @@ const Generate = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                   placeholder="Enter document title"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Document Reference
+                  </label>
+                  <input
+                    type="text"
+                    value={documentReference}
+                    onChange={(e) => setDocumentReference(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    placeholder="e.g., DOC-2024-001"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Document reference number or code
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Issue Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Date when document is issued
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -327,6 +454,37 @@ const Generate = () => {
                   placeholder="Site name or address"
                 />
               </div>
+
+              {documentType !== 'principle' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Document Layer
+                  </label>
+                  <select
+                    value={layer}
+                    onChange={(e) => setLayer(e.target.value as DocumentLayer || '')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base bg-white"
+                  >
+                    <option value="">Select Layer (Optional)</option>
+                    <option value="policy">Policy (BRC Standards)</option>
+                    <option value="principle">Principle (Quality Manual)</option>
+                    <option value="sop">SOP (Standard Operating Procedure)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {layer === 'principle' && 'Principle documents bridge Policy and SOPs by explaining how to prove compliance with policy clauses.'}
+                    {layer === 'policy' && 'Policy documents contain high-level BRC requirements and standards.'}
+                    {layer === 'sop' && 'SOP documents contain practical step-by-step procedures for implementation.'}
+                    {!layer && 'Classify this document by its layer in the hierarchy.'}
+                  </p>
+                </div>
+              )}
+              {documentType === 'principle' && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-xs text-purple-800">
+                    <strong>Principle Document:</strong> This document will be automatically classified as a Principle (Quality Manual layer) that bridges Policy and SOPs.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -686,6 +844,275 @@ const Generate = () => {
                     <Plus size={16} />
                     Add Step
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Principle Fields */}
+          {documentType === 'principle' && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 shadow-sm">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Principle Document Details</h2>
+              
+              {/* Methodology Explanation */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-l-4 border-purple-500 rounded-lg">
+                <h3 className="text-sm font-semibold text-purple-900 mb-2">📋 Principle Document Methodology</h3>
+                <p className="text-xs text-gray-700 mb-3">
+                  <strong>Principle documents are the critical bridge layer</strong> between Policy (BRC Standards) and SOPs (Standard Operating Procedures).
+                </p>
+                <div className="text-xs text-gray-700 space-y-1 mb-3">
+                  <p><strong>Key Purpose:</strong> Principles answer: <em>"How do we prove that we meet each policy clause?"</em></p>
+                  <p><strong>Core Functions:</strong></p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li><strong>Bridge Policy to SOPs:</strong> Connect high-level BRC requirements to practical procedures</li>
+                    <li><strong>Define Compliance Proof:</strong> Explain how compliance with policy requirements is demonstrated</li>
+                    <li><strong>Ensure Consistency:</strong> Define consistent expectations across all functions (Technical, H&S, Environment, Operations, HR)</li>
+                    <li><strong>Provide Framework:</strong> Establish the framework that SOPs will follow</li>
+                    <li><strong>Explain "What" and "Why":</strong> Before SOPs define the "how"</li>
+                  </ul>
+                </div>
+                <div className="text-xs text-gray-600 italic border-t border-purple-200 pt-2">
+                  <strong>Layer Hierarchy:</strong> Policy (WHAT) → Principle (HOW TO PROVE) → SOP (HOW TO DO)
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {/* BRC Clause */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    BRC Clause / Policy Requirement *
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    The Policy layer requirement that this Principle bridges to SOPs. This is the "WHAT" that must be achieved.
+                  </p>
+                  <textarea
+                    value={principleData.brcClause}
+                    onChange={(e) => setPrincipleData({ ...principleData, brcClause: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    rows={3}
+                    placeholder="Paste the BRC clause or policy requirement this Principle addresses"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Clause Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={principleData.clauseNumber}
+                      onChange={(e) => setPrincipleData({ ...principleData, clauseNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                      placeholder="e.g., 3.1.1"
+                    />
+                  </div>
+                </div>
+
+                {/* Intent */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Intent of the Clause *
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Explain what this clause is intended to achieve and why it exists in the BRC standard. This helps define the "WHY" before SOPs define the "HOW".
+                  </p>
+                  <textarea
+                    value={principleData.intent}
+                    onChange={(e) => setPrincipleData({ ...principleData, intent: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    rows={3}
+                    placeholder="What is the intent/purpose of this BRC clause?"
+                  />
+                </div>
+
+                {/* Risk of Non-Compliance */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Risk of Non-Compliance *
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Clearly articulate the risks if this clause is not met. This demonstrates the importance of compliance and guides the evidence requirements.
+                  </p>
+                  <textarea
+                    value={principleData.riskOfNonCompliance}
+                    onChange={(e) => setPrincipleData({ ...principleData, riskOfNonCompliance: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    rows={3}
+                    placeholder="What are the risks if we don't comply with this clause?"
+                  />
+                </div>
+
+                {/* Core Organisational Commitments */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Core Organisational Commitments *
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Key commitments the organization makes to meet this clause. These are high-level promises that guide all operations and provide the framework SOPs will follow.
+                  </p>
+                  {principleData.coreCommitments.map((commitment, index) => (
+                    <div key={index} className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={commitment}
+                        onChange={(e) => {
+                          const updated = [...principleData.coreCommitments];
+                          updated[index] = e.target.value;
+                          setPrincipleData({ ...principleData, coreCommitments: updated });
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                        placeholder={`Commitment ${index + 1}`}
+                      />
+                      <button
+                        onClick={() => {
+                          setPrincipleData({
+                            ...principleData,
+                            coreCommitments: principleData.coreCommitments.filter((_, i) => i !== index),
+                          });
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setPrincipleData({ ...principleData, coreCommitments: [...principleData.coreCommitments, ''] })}
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <Plus size={16} />
+                    Add Commitment
+                  </button>
+                </div>
+
+                {/* Evidence Expectations */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Evidence Expectations *
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    <strong>Critical for Principle documents:</strong> What evidence demonstrates compliance with this clause? This answers "How do we prove we meet each policy clause?" - the core purpose of Principle documents.
+                  </p>
+                  {principleData.evidenceExpectations.map((evidence, index) => (
+                    <div key={index} className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={evidence}
+                        onChange={(e) => {
+                          const updated = [...principleData.evidenceExpectations];
+                          updated[index] = e.target.value;
+                          setPrincipleData({ ...principleData, evidenceExpectations: updated });
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                        placeholder={`Evidence type ${index + 1} (e.g., documented records, audit reports)`}
+                      />
+                      <button
+                        onClick={() => {
+                          setPrincipleData({
+                            ...principleData,
+                            evidenceExpectations: principleData.evidenceExpectations.filter((_, i) => i !== index),
+                          });
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setPrincipleData({ ...principleData, evidenceExpectations: [...principleData.evidenceExpectations, ''] })}
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <Plus size={16} />
+                    Add Evidence Type
+                  </button>
+                </div>
+
+                {/* Cross-Functional Responsibilities */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cross-Functional Responsibilities *
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    <strong>Ensures consistency across all functions:</strong> Define responsibilities for Technical, H&S, Environment, Operations, and HR. This is a key function of Principle documents - ensuring consistent expectations across all departments.
+                  </p>
+                  {principleData.crossFunctionalResponsibilities.map((resp, index) => (
+                    <div key={index} className="mb-3 p-3 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={resp.function}
+                          onChange={(e) => {
+                            const updated = [...principleData.crossFunctionalResponsibilities];
+                            updated[index].function = e.target.value;
+                            setPrincipleData({ ...principleData, crossFunctionalResponsibilities: updated });
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base font-medium"
+                          placeholder="Function (e.g., Technical, H&S, Environment, Operations, HR)"
+                        />
+                      </div>
+                      <textarea
+                        value={resp.responsibility}
+                        onChange={(e) => {
+                          const updated = [...principleData.crossFunctionalResponsibilities];
+                          updated[index].responsibility = e.target.value;
+                          setPrincipleData({ ...principleData, crossFunctionalResponsibilities: updated });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                        rows={2}
+                        placeholder={`${resp.function || 'Function'} responsibility for this Principle`}
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setPrincipleData({ 
+                      ...principleData, 
+                      crossFunctionalResponsibilities: [...principleData.crossFunctionalResponsibilities, { function: '', responsibility: '' }] 
+                    })}
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <Plus size={16} />
+                    Add Function
+                  </button>
+                </div>
+
+                {/* Decision Logic / Rationale */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Decision Logic / Rationale (Optional)
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Explain the decision logic or rationale behind this Principle. This helps future users understand the approach and methodology chosen.
+                  </p>
+                  <textarea
+                    value={principleData.decisionLogic || ''}
+                    onChange={(e) => setPrincipleData({ ...principleData, decisionLogic: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    rows={3}
+                    placeholder="Explain the decision logic or rationale behind this Principle"
+                  />
+                </div>
+
+                {/* Analyze Existing SOPs */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id="analyzeSOPs"
+                      checked={principleData.analyzeExistingSOPs}
+                      onChange={(e) => setPrincipleData({ ...principleData, analyzeExistingSOPs: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
+                    />
+                    <div>
+                      <label htmlFor="analyzeSOPs" className="text-sm font-medium text-gray-700 block mb-1">
+                        Analyze existing SOPs to extract common themes and identify gaps
+                      </label>
+                      <p className="text-xs text-gray-600">
+                        The system will analyze existing SOPs to identify: common controls across departments, cross-functional interactions, consistency/variability indicators, and gaps that should be elevated into this Principle document.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

@@ -18,9 +18,9 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/chat" replace />} />
           <Route path="chat" element={<Chat />} />
-          <Route path="documents" element={<Documents />} />
-          <Route path="documents/upload" element={<Upload />} />
+          <Route path="upload" element={<Upload />} />
           <Route path="generate" element={<Generate />} />
+          <Route path="documents" element={<Documents />} />
           <Route path="analytics" element={<Analytics />} />
         </Route>
       </Routes>

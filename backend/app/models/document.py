@@ -17,6 +17,13 @@ class DocumentResponse(BaseModel):
     fileType: Optional[str] = None  # 'pdf' | 'docx' | 'txt'
     fileSize: Optional[int] = None  # in bytes
     layer: Optional[str] = None  # 'policy' | 'principle' | 'sop'
+    downloadUrl: Optional[str] = None
+    previewUrl: Optional[str] = None
+    sharePointUrl: Optional[str] = None  # SharePoint file URL
+
+    class Config:
+        """Pydantic configuration."""
+        allow_population_by_field_name = True
 
 
 class UploadResponse(BaseModel):

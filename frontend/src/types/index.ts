@@ -20,6 +20,7 @@ export interface Document {
   fileSize?: number; // in bytes
   downloadUrl?: string;
   previewUrl?: string;
+  sharePointUrl?: string; // SharePoint file URL
 }
 
 export interface ChatMessage {
@@ -77,14 +78,15 @@ export interface DailyMetrics {
   documents_accessed: string[];
 }
 
-export type DocumentType = 
+export type DocumentType =
   | 'risk-assessment'
   | 'method-statement'
   | 'safe-work-procedure'
   | 'quality-control-plan'
   | 'inspection-checklist'
   | 'training-record'
-  | 'incident-report';
+  | 'incident-report'
+  | 'principle';
 
 export type DocumentFormat = 'docx' | 'pdf' | 'markdown';
 
@@ -129,6 +131,24 @@ export interface MethodStatementData {
   reviewDate: string;
 }
 
+export interface PrincipleData {
+  brcClause: string;
+  clauseNumber?: string;
+  intent: string;
+  riskOfNonCompliance: string;
+  coreCommitments: string[];
+  evidenceExpectations: string[];
+  crossFunctionalResponsibilities: Array<{
+    function: 'Technical' | 'H&S' | 'Environment' | 'Operations' | 'HR' | string;
+    responsibility: string;
+  }>;
+  decisionLogic?: string;
+  rationale?: string;
+  analyzeExistingSOPs?: boolean;
+  linkedSOPs?: string[];
+  relatedPolicyDocuments?: string[];
+}
+
 export interface DocumentGenerationRequest {
   documentType: DocumentType;
   format: DocumentFormat;
@@ -140,8 +160,11 @@ export interface DocumentGenerationRequest {
   author: string;
   reviewDate?: string;
   version?: string;
+  documentReference?: string;
+  issueDate?: string;
+  layer?: DocumentLayer;
   useStandards: boolean;
-  data: RiskAssessmentData | MethodStatementData | Record<string, any>;
+  data: RiskAssessmentData | MethodStatementData | PrincipleData | Record<string, any>;
 }
 
 export interface DocumentGenerationResponse {

@@ -134,7 +134,7 @@ Azure AI Search pricing is based on **Search Units (SU)** which include compute,
 | Development/Testing | Free | $0 |
 | Small (< 100 docs, < 10K searches) | Basic | $75 |
 | Medium (< 1K docs, < 100K searches) | Basic | $75 |
-| Large (< 5K docs, < 500K searches) | Standard S1 | $250 |
+|  |
 | Enterprise (> 5K docs, > 500K searches) | Standard S2 | $1,000+ |
 
 **Additional Costs:**
