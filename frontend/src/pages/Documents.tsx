@@ -50,7 +50,7 @@ const Documents = () => {
   const [updateCategory, setUpdateCategory] = useState('');
   const [updateTags, setUpdateTags] = useState('');
   const [updateLayer, setUpdateLayer] = useState<DocumentLayer | ''>('');
-  const [debugInfo, setDebugInfo] = useState<string>('');
+  const [debugInfo, setDebugInfo] = useState<string>('v2-init');
 
   // Load documents
   useEffect(() => {
@@ -468,7 +468,7 @@ const Documents = () => {
       {/* Results Count */}
       <div className="mb-4 text-sm text-gray-600">
         Showing {filteredDocuments.length} of {documents.length} document(s)
-        {debugInfo && <span className="ml-2 text-xs text-blue-500">({debugInfo})</span>}
+        <span className="ml-2 text-xs text-blue-500">[{debugInfo}]</span>
       </div>
 
       {/* Documents Grid */}
