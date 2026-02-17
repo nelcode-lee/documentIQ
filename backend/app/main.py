@@ -56,7 +56,8 @@ async def debug_status():
         "api": "running",
         "supabase": {"configured": False, "connected": False, "error": None},
         "openai": {"configured": False},
-        "packages": {}
+        "packages": {},
+        "documents": {"count": 0, "error": None}
     }
     
     # Check Supabase
@@ -69,6 +70,20 @@ async def debug_status():
             result = client.table("documents").select("document_id").limit(1).execute()
             status["supabase"]["connected"] = True
             status["supabase"]["test_query"] = "success"
+            
+            # Count documents
+            try:
+                count_result = client.table("documents").select("document_id", count="exact").execute()
+                status["documents"]["count"] = count_result.count if hasattr(count_result, 'count') else len(count_result.data)
+                
+                # Get unique document IDs
+                all_docs = client.table("documents").select("document_id").limit(100).execute()
+                unique_ids = set(d.get("document_id") for d in all_docs.data if d.get("document_id"))
+                status["documents"]["unique_documents"] = len(unique_ids)
+                status["documents"]["sample_ids"] = list(unique_ids)[:5]
+            except Exception as doc_error:
+                status["documents"]["error"] = str(doc_error)
+                
         except Exception as e:
             status["supabase"]["error"] = str(e)
     
