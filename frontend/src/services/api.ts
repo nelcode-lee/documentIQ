@@ -2,7 +2,24 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// Detect production environment and use correct backend URL
+const getApiBaseUrl = () => {
+  // Check for environment variable first
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Auto-detect production on Railway
+  if (typeof window !== 'undefined' && window.location.hostname.includes('railway.app')) {
+    return 'https://documentiq-production.up.railway.app';
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:8000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+console.log('[API] Using backend URL:', API_BASE_URL);
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
