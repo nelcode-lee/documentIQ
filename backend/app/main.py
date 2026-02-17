@@ -49,6 +49,55 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/api/debug/status")
+async def debug_status():
+    """Debug endpoint to check service status."""
+    status = {
+        "api": "running",
+        "supabase": {"configured": False, "connected": False, "error": None},
+        "openai": {"configured": False},
+        "packages": {}
+    }
+    
+    # Check Supabase
+    if settings.supabase_url and settings.supabase_anon_key:
+        status["supabase"]["configured"] = True
+        try:
+            from supabase import create_client
+            client = create_client(settings.supabase_url, settings.supabase_anon_key)
+            # Test connection
+            result = client.table("documents").select("document_id").limit(1).execute()
+            status["supabase"]["connected"] = True
+            status["supabase"]["test_query"] = "success"
+        except Exception as e:
+            status["supabase"]["error"] = str(e)
+    
+    # Check OpenAI
+    if settings.openai_api_key:
+        status["openai"]["configured"] = True
+    
+    # Check package versions
+    try:
+        import supabase
+        status["packages"]["supabase"] = getattr(supabase, "__version__", "unknown")
+    except:
+        status["packages"]["supabase"] = "not installed"
+    
+    try:
+        import httpx
+        status["packages"]["httpx"] = httpx.__version__
+    except:
+        status["packages"]["httpx"] = "not installed"
+    
+    try:
+        import gotrue
+        status["packages"]["gotrue"] = getattr(gotrue, "__version__", "unknown")
+    except:
+        status["packages"]["gotrue"] = "not installed"
+    
+    return status
+
+
 # Import routers
 from app.routers import chat, documents, generate, analytics
 
