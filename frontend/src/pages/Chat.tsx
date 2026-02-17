@@ -385,31 +385,31 @@ const Chat = () => {
 
       {/* Input area */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
-        <div className="flex items-end gap-2 sm:gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder={t.typeMessage}
-            className="flex-1 min-h-[50px] sm:min-h-[60px] max-h-32 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            className="flex-1 min-h-[60px] sm:min-h-[60px] max-h-32 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             rows={2}
             disabled={isLoading}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            className="px-3 sm:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-1 sm:gap-2 font-medium text-sm sm:text-base flex-shrink-0"
+            className="w-full sm:w-auto px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-medium text-sm sm:text-base flex-shrink-0"
           >
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                <span className="hidden sm:inline">{t.loading}</span>
+                <span>{t.loading}</span>
               </>
             ) : (
               <>
                 <Send size={18} />
-                <span className="hidden sm:inline">{t.send}</span>
+                <span>{t.send}</span>
               </>
             )}
           </button>
