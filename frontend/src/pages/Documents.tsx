@@ -50,14 +50,17 @@ const Documents = () => {
   const [updateCategory, setUpdateCategory] = useState('');
   const [updateTags, setUpdateTags] = useState('');
   const [updateLayer, setUpdateLayer] = useState<DocumentLayer | ''>('');
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
   // Load documents
   useEffect(() => {
     const loadDocuments = async () => {
       setLoading(true);
+      setDebugInfo('Loading...');
       
       try {
         const docs = await documentService.getDocuments();
+        setDebugInfo(`Loaded ${docs?.length || 0} documents`);
         if (docs && docs.length > 0) {
           setDocuments(docs);
         } else {
@@ -66,6 +69,8 @@ const Documents = () => {
         }
       } catch (error) {
         console.error('Error loading documents:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setDebugInfo(`Error: ${errorMessage}`);
         // Show error but don't use placeholder data
         setDocuments([]);
       } finally {
@@ -463,6 +468,7 @@ const Documents = () => {
       {/* Results Count */}
       <div className="mb-4 text-sm text-gray-600">
         Showing {filteredDocuments.length} of {documents.length} document(s)
+        {debugInfo && <span className="ml-2 text-xs text-blue-500">({debugInfo})</span>}
       </div>
 
       {/* Documents Grid */}
