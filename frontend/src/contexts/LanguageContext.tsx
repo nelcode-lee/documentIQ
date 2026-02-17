@@ -1,6 +1,6 @@
 /** Language context for managing app-wide language selection. */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { translations, type Language } from '../i18n/translations';
 
 interface LanguageContextType {

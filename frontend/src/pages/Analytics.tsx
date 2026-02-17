@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  PieChart, Pie, Cell, AreaChart, Area, ComposedChart, RadarChart, PolarGrid, PolarAngleAxis, 
-  PolarRadiusAxis, Radar, ScatterChart, Scatter, Treemap
+  Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+  Cell, AreaChart, Area, ComposedChart, ScatterChart, Scatter
 } from 'recharts';
 import { analyticsService } from '../services/analyticsService';
 import type { Analytics, DailyMetrics } from '../types';
@@ -110,12 +109,6 @@ const AnalyticsPage = () => {
     avgResponseTime: metric.average_response_time || 0,
     documentsAccessed: metric.documents_accessed?.length || 0,
   }));
-
-  // Calculate hourly distribution (if we had hourly data, for now use daily as proxy)
-  const hourlyDistribution = dailyChartData.reduce((acc, item) => {
-    acc.push({ time: item.date, queries: item.queries });
-    return acc;
-  }, [] as Array<{ time: string; queries: number }>);
 
   const topDocumentsData = analytics.topDocuments.slice(0, 10).map((doc) => ({
     name: doc.title.length > 30 ? doc.title.substring(0, 30) + '...' : doc.title,
