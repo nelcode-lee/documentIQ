@@ -67,7 +67,7 @@ class SharePointLinkRequest(BaseModel):
     """Request model for updating SharePoint link."""
     sharePointUrl: str
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 
 def generate_blob_download_url(blob_name: str, container_name: str) -> Optional[str]:
     """Generate a SAS URL for downloading a blob."""

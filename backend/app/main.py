@@ -14,6 +14,18 @@ try:
 except Exception as e:
     print(f"[WARNING] Could not initialize Neon database: {e}")
 
+# Initialize Vector Store early to see logs
+try:
+    from app.services.vector_store import get_vector_store
+    vs = get_vector_store()
+    print(f"[INFO] Vector store initialized: supabase={vs.use_supabase}, azure={vs.use_azure}")
+    if vs.supabase_client:
+        print("[OK] Vector store Supabase client ready")
+    else:
+        print("[WARNING] Vector store Supabase client is None")
+except Exception as e:
+    print(f"[ERROR] Vector store initialization failed: {e}")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="DocumentIQ API",
