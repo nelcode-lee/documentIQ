@@ -50,28 +50,21 @@ const Documents = () => {
   const [updateCategory, setUpdateCategory] = useState('');
   const [updateTags, setUpdateTags] = useState('');
   const [updateLayer, setUpdateLayer] = useState<DocumentLayer | ''>('');
-  const [debugInfo, setDebugInfo] = useState<string>('v2-init');
 
   // Load documents
   useEffect(() => {
     const loadDocuments = async () => {
       setLoading(true);
-      setDebugInfo('Loading...');
       
       try {
         const docs = await documentService.getDocuments();
-        setDebugInfo(`Loaded ${docs?.length || 0} documents`);
         if (docs && docs.length > 0) {
           setDocuments(docs);
         } else {
-          // If no documents, keep empty array (don't show placeholders)
           setDocuments([]);
         }
       } catch (error) {
         console.error('Error loading documents:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        setDebugInfo(`Error: ${errorMessage}`);
-        // Show error but don't use placeholder data
         setDocuments([]);
       } finally {
         setLoading(false);
@@ -333,41 +326,35 @@ const Documents = () => {
         </div>
       </div>
 
-      {/* Important Notes */}
-      <div className="space-y-4 mb-6">
+      {/* Important Notes - Collapsible on mobile */}
+      <div className="space-y-3 mb-6">
         {/* Document Quality Note */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <FileText size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <FileText size={18} className="text-blue-600 mt-0.5 flex-shrink-0 hidden sm:block" />
             <div>
-              <h3 className="text-sm font-semibold text-blue-900 mb-1">
+              <h3 className="text-xs sm:text-sm font-semibold text-blue-900 mb-1">
                 Documents are key to response quality
               </h3>
-              <p className="text-sm text-blue-800">
-                Effective document management is essential and required. High-quality, well-organized documents
-                ensure accurate, relevant, and contextually appropriate responses from the AI assistant.
-                Regular review and maintenance of your document library directly impacts response quality.
+              <p className="text-xs sm:text-sm text-blue-800 hidden sm:block">
+                High-quality, well-organized documents ensure accurate AI responses.
               </p>
             </div>
           </div>
         </div>
 
         {/* Layer Hierarchy Note */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <FileText size={20} className="text-green-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <h3 className="text-sm font-semibold text-green-900 mb-1">
-                Document Layer Hierarchy
-              </h3>
-              <div className="text-sm text-green-800 space-y-1">
-                <p><strong>Policy:</strong> High-level BRC requirements and standards</p>
-                <p><strong>Principle (Quality Manual):</strong> The bridge layer - explains "How do we prove we meet each policy clause?" Defines consistent expectations across all functions (Technical, H&S, Environment, Operations, HR). Links BRC requirements to practical SOPs.</p>
-                <p><strong>SOP:</strong> Practical step-by-step procedures for implementation</p>
-              </div>
-            </div>
+        <details className="bg-green-50 border border-green-200 rounded-lg">
+          <summary className="p-3 sm:p-4 cursor-pointer text-xs sm:text-sm font-semibold text-green-900 flex items-center gap-2">
+            <FileText size={18} className="text-green-600 flex-shrink-0 hidden sm:block" />
+            Document Layer Hierarchy
+          </summary>
+          <div className="px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm text-green-800 space-y-1">
+            <p><strong>Policy:</strong> High-level BRC requirements</p>
+            <p><strong>Principle:</strong> Bridge layer linking requirements to SOPs</p>
+            <p><strong>SOP:</strong> Step-by-step procedures</p>
           </div>
-        </div>
+        </details>
       </div>
 
       {/* Filters and Search */}
@@ -394,73 +381,75 @@ const Documents = () => {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter size={18} className="text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Filter:</span>
-            </div>
-
-            {/* Source Filter */}
-            <div className="flex gap-2">
-              {(['all', 'uploaded', 'generated'] as FilterType[]).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setFilter(type)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    filter === type
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {/* Layer Filter */}
-            <div className="flex gap-2">
-              {(['all', 'policy', 'principle', 'sop'] as LayerFilter[]).map((layer) => (
-                <button
-                  key={layer}
-                  onClick={() => setLayerFilter(layer)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    layerFilter === layer
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {layer === 'all' ? 'All Layers' : layer.charAt(0).toUpperCase() + layer.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {/* Category Filter */}
-            {categories.length > 0 && (
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
+          <div className="space-y-3">
+            {/* Source Filter Row */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 w-full sm:w-auto">Source:</span>
+              <div className="flex flex-wrap gap-1">
+                {(['all', 'uploaded', 'generated'] as FilterType[]).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilter(type)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      filter === type
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
                 ))}
-              </select>
-            )}
+              </div>
+            </div>
 
-            {/* Sort */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ml-auto"
-            >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="title">Title A-Z</option>
-              <option value="category">Category</option>
-            </select>
+            {/* Layer Filter Row */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 w-full sm:w-auto">Layer:</span>
+              <div className="flex flex-wrap gap-1">
+                {(['all', 'policy', 'principle', 'sop'] as LayerFilter[]).map((layer) => (
+                  <button
+                    key={layer}
+                    onClick={() => setLayerFilter(layer)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      layerFilter === layer
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {layer === 'all' ? 'All' : layer.charAt(0).toUpperCase() + layer.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Category and Sort Row */}
+            <div className="flex flex-wrap items-center gap-2">
+              {categories.length > 0 && (
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0 max-w-[150px]"
+                >
+                  <option value="all">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 ml-auto"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="title">A-Z</option>
+                <option value="category">Category</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -468,7 +457,6 @@ const Documents = () => {
       {/* Results Count */}
       <div className="mb-4 text-sm text-gray-600">
         Showing {filteredDocuments.length} of {documents.length} document(s)
-        <span className="ml-2 text-xs text-blue-500">[{debugInfo}]</span>
       </div>
 
       {/* Documents Grid */}
