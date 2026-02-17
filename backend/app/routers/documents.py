@@ -9,12 +9,21 @@ import uuid
 import os
 import tempfile
 from datetime import datetime
-from azure.storage.blob import BlobServiceClient, BlobSasPermissions, generate_blob_sas
 from app.config import settings
 from app.services.document_processor import DocumentProcessor
 from app.services.embedding_service import EmbeddingService
 from app.services.vector_store import VectorStoreManager, get_vector_store, invalidate_documents_cache
 from app.services.document_store import document_store
+
+# Optional Azure imports
+try:
+    from azure.storage.blob import BlobServiceClient, BlobSasPermissions, generate_blob_sas
+    AZURE_AVAILABLE = True
+except ImportError:
+    AZURE_AVAILABLE = False
+    BlobServiceClient = None
+    BlobSasPermissions = None
+    generate_blob_sas = None
 
 
 class LinkDocumentsRequest(BaseModel):

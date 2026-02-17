@@ -25,8 +25,13 @@ class VectorStoreManager:
     
     def __init__(self):
         """Initialize vector store client."""
+        print(f"[DEBUG] Supabase URL configured: {bool(settings.supabase_url)}")
+        print(f"[DEBUG] Supabase Anon Key configured: {bool(settings.supabase_anon_key)}")
+        
         self.use_supabase = bool(settings.supabase_url and settings.supabase_anon_key)
         self.use_azure = bool(settings.azure_search_endpoint and settings.azure_search_api_key)
+        
+        print(f"[DEBUG] use_supabase={self.use_supabase}, use_azure={self.use_azure}")
         
         self.supabase_client = None
         self.search_client = None
@@ -41,18 +46,24 @@ class VectorStoreManager:
                 print("[OK] Vector store using Supabase pgvector")
             except Exception as e:
                 print(f"[WARNING] Could not initialize Supabase: {e}")
+                import traceback
+                traceback.print_exc()
                 self.use_supabase = False
         
         if not self.use_supabase and self.use_azure:
-            from azure.search.documents import SearchClient
-            from azure.core.credentials import AzureKeyCredential
-            credential = AzureKeyCredential(settings.azure_search_api_key)
-            self.search_client = SearchClient(
-                endpoint=settings.azure_search_endpoint,
-                index_name=settings.azure_search_index_name,
-                credential=credential
-            )
-            print("[OK] Vector store using Azure AI Search")
+            try:
+                from azure.search.documents import SearchClient
+                from azure.core.credentials import AzureKeyCredential
+                credential = AzureKeyCredential(settings.azure_search_api_key)
+                self.search_client = SearchClient(
+                    endpoint=settings.azure_search_endpoint,
+                    index_name=settings.azure_search_index_name,
+                    credential=credential
+                )
+                print("[OK] Vector store using Azure AI Search")
+            except Exception as e:
+                print(f"[WARNING] Could not initialize Azure: {e}")
+                self.use_azure = False
         
         if not self.use_supabase and not self.use_azure:
             print("[WARNING] No vector store backend configured - search will be limited")
