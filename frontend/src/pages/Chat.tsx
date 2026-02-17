@@ -1,7 +1,7 @@
 /** Chat interface page. */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Trash2, Info, X } from 'lucide-react';
+import { Send, Loader2, Trash2, Info, X, Lightbulb } from 'lucide-react';
 import ChatMessage from '../components/ChatMessage';
 import type { ChatMessage as ChatMessageType } from '../types';
 import { chatService } from '../services/chatService';
