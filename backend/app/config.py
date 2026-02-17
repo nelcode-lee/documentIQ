@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     
     # Application
     api_v1_prefix: str = "/api"
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173", "https://*.up.railway.app", "https://*.railway.app", "*"]
     debug: bool = False
     
     # Caching
