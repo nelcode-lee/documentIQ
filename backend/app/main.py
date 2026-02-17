@@ -32,7 +32,8 @@ app = FastAPI(
     description="AI-powered document intelligence system for technical standards",
     version="0.1.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    redirect_slashes=False  # Don't redirect /api/documents to /api/documents/
 )
 
 # Configure CORS
