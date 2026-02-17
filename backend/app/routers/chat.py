@@ -19,6 +19,7 @@ chat_service = ChatService()
 analytics_service = AnalyticsService()
 
 
+@router.post("", response_model=ChatResponse)
 @router.post("/", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     """
