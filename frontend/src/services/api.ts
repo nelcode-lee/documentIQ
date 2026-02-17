@@ -18,7 +18,7 @@ const getApiBaseUrl = () => {
   return 'http://localhost:8000';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 console.log('[API] Using backend URL:', API_BASE_URL);
 
 export const apiClient = axios.create({

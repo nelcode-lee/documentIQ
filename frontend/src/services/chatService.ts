@@ -1,6 +1,6 @@
 /** Chat service for API communication. */
 
-import apiClient from './api';
+import apiClient, { API_BASE_URL } from './api';
 import type { ChatRequest, ChatResponse } from '../types';
 
 export interface QuickRatingRequest {
@@ -30,7 +30,7 @@ export const chatService = {
    */
   async *sendMessageStream(request: ChatRequest): AsyncGenerator<string, void, unknown> {
     const response = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/chat/stream`,
+      `${API_BASE_URL}/api/chat/stream`,
       {
         method: 'POST',
         headers: {

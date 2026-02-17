@@ -14,7 +14,7 @@ from datetime import datetime
 import uuid
 import time
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 chat_service = ChatService()
 analytics_service = AnalyticsService()
 
