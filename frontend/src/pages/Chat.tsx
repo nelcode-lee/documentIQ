@@ -184,16 +184,18 @@ const Chat = () => {
       console.error('Error sending message:', error);
       // Extract detailed error information for debugging
       let errorDetail = 'Unknown error';
-      const axiosError = error as { response?: { status: number; data?: { detail?: string } }; message?: string };
+      const axiosError = error as { response?: { status: number; data?: { detail?: string } }; message?: string; code?: string };
       if (axiosError.response) {
-        errorDetail = `Status ${axiosError.response.status}: ${axiosError.response.data?.detail || 'Server error'}`;
+        errorDetail = `[HTTP ${axiosError.response.status}] ${axiosError.response.data?.detail || 'Server error'}`;
+      } else if (axiosError.code) {
+        errorDetail = `[${axiosError.code}] ${axiosError.message || 'Connection failed'}`;
       } else if (axiosError.message) {
         errorDetail = axiosError.message;
       }
       const errorMessage: ChatMessageType = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `${t.error}: ${errorDetail}`,
+        content: `[v3] Error: ${errorDetail}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
