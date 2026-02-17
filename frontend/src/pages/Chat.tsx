@@ -278,51 +278,50 @@ const Chat = () => {
         )}
       </div>
 
-      {/* Quick Search Terms - Show when no messages */}
-      {messages.length === 0 && popularQuestions.length > 0 && (
-        <div className="mb-4">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 sm:p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <span className="text-blue-600">💡</span>
-              {topSearchedTerms.length > 0 ? t.mostPopularQuestions : t.popularQuestions}
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {popularQuestions.slice(0, 5).map((term, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuickSelect(term)}
-                  className="px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs sm:text-sm text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
-                  title={term}
-                >
-                  {truncateQuestion(term, 50)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto bg-gray-50 rounded-lg p-3 sm:p-6 mb-4 border border-gray-200">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center px-4 max-w-2xl w-full">
-              <div className="mb-4 sm:mb-6">
-                <h2 className="text-xl sm:text-3xl font-bold text-gray-900 mb-2">
-                  {t.greeting}
-                </h2>
-                <p className="text-sm sm:text-lg text-gray-600">
-                  {t.greetingSubtitle}
-                </p>
-              </div>
+          <div className="flex flex-col h-full">
+            {/* Welcome section */}
+            <div className="text-center py-4 sm:py-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">
+                {t.greeting}
+              </h2>
+              <p className="text-sm text-gray-600 mb-3">
+                {t.greetingSubtitle}
+              </p>
               <button
                 onClick={() => setShowInfoModal(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium shadow-sm"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
               >
-                <Info size={18} />
+                <Info size={16} />
                 <span>{t.howToUse}</span>
               </button>
             </div>
+
+            {/* Popular questions */}
+            {popularQuestions.length > 0 && (
+              <div className="flex-1 overflow-y-auto">
+                <div className="bg-white rounded-lg border border-blue-200 p-3 sm:p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                    <span>💡</span>
+                    {topSearchedTerms.length > 0 ? t.mostPopularQuestions : t.popularQuestions}
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {popularQuestions.slice(0, 5).map((term, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleQuickSelect(term)}
+                        className="px-2 py-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-gray-700 hover:bg-blue-100 transition-colors text-left"
+                        title={term}
+                      >
+                        {truncateQuestion(term, 40)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div>
