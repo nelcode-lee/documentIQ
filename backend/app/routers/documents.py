@@ -211,6 +211,7 @@ async def upload_document(
         )
 
 
+@router.get("")
 @router.get("/")
 async def list_documents(layer: Optional[str] = None) -> List[DocumentResponse]:
     """
@@ -218,11 +219,15 @@ async def list_documents(layer: Optional[str] = None) -> List[DocumentResponse]:
     
     Fetches unique documents by grouping chunks by documentId.
     """
+    print("[DOCUMENTS] list_documents endpoint called")
     try:
         import json
         
         # Use singleton vector store manager (faster - no client recreation)
+        print("[DOCUMENTS] Getting vector store...")
         vector_store = get_vector_store()
+        print(f"[DOCUMENTS] Vector store: use_supabase={vector_store.use_supabase}, use_azure={vector_store.use_azure}")
+        print(f"[DOCUMENTS] Supabase client: {vector_store.supabase_client is not None}")
         
         # Check if using Supabase
         if vector_store.use_supabase and vector_store.supabase_client:
