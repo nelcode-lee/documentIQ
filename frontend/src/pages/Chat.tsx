@@ -1,22 +1,15 @@
 /** Chat interface page. */
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Trash2, Lightbulb, Info, X } from 'lucide-react';
+import { Send, Loader2, Trash2, Info, X } from 'lucide-react';
 import ChatMessage from '../components/ChatMessage';
 import type { ChatMessage as ChatMessageType } from '../types';
 import { chatService } from '../services/chatService';
 import { analyticsService } from '../services/analyticsService';
 import { useLanguage } from '../contexts/LanguageContext';
-import type { Language } from '../i18n/translations';
-
-const languages: { code: Language; name: string; flag: string }[] = [
-  { code: 'en', name: 'English', flag: '🇬🇧' },
-  { code: 'pl', name: 'Polski', flag: '🇵🇱' },
-  { code: 'ro', name: 'Română', flag: '🇷🇴' },
-];
 
 const Chat = () => {
-  const { language: selectedLanguage, setLanguage: setSelectedLanguage, t } = useLanguage();
+  const { language: selectedLanguage, t } = useLanguage();
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -273,40 +266,16 @@ const Chat = () => {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          {/* Language Selection */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 hidden sm:inline">{t.language}:</span>
-            <div className="flex gap-1 bg-white border border-gray-300 rounded-lg p-1">
-              {languages.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => setSelectedLanguage(lang.code)}
-                  className={`px-2 py-1 rounded text-lg transition-all ${
-                    selectedLanguage === lang.code
-                      ? 'bg-blue-100 scale-110'
-                      : 'hover:bg-gray-100'
-                  }`}
-                  title={lang.name}
-                  aria-label={`Select ${lang.name}`}
-                >
-                  {lang.flag}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          {messages.length > 0 && (
-            <button
-              onClick={handleClear}
-              className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Trash2 size={16} />
-              <span className="hidden sm:inline">{t.clearChat}</span>
-              <span className="sm:hidden">{t.clear}</span>
-            </button>
-          )}
-        </div>
+        {messages.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Trash2 size={16} />
+            <span className="hidden sm:inline">{t.clearChat}</span>
+            <span className="sm:hidden">{t.clear}</span>
+          </button>
+        )}
       </div>
 
       {/* Quick Search Terms - Show when no messages */}
@@ -337,24 +306,22 @@ const Chat = () => {
       <div className="flex-1 overflow-y-auto bg-gray-50 rounded-lg p-3 sm:p-6 mb-4 border border-gray-200">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center px-4 max-w-2xl">
-              <div className="mb-6">
-                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+            <div className="text-center px-4 max-w-2xl w-full">
+              <div className="mb-4 sm:mb-6">
+                <h2 className="text-xl sm:text-3xl font-bold text-gray-900 mb-2">
                   {t.greeting}
                 </h2>
-                <p className="text-base sm:text-lg text-gray-600">
+                <p className="text-sm sm:text-lg text-gray-600">
                   {t.greetingSubtitle}
                 </p>
               </div>
-              <div className="flex justify-center mb-4">
-                <button
-                  onClick={() => setShowInfoModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
-                >
-                  <Info size={18} />
-                  <span>{t.howToUse}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowInfoModal(true)}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium shadow-sm"
+              >
+                <Info size={18} />
+                <span>{t.howToUse}</span>
+              </button>
             </div>
           </div>
         ) : (
