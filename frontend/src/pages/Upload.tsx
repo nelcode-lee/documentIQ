@@ -22,14 +22,14 @@ const Upload = () => {
   const [uploadingCount, setUploadingCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const acceptedFileTypes = ['.pdf', '.docx', '.txt'];
+  const acceptedFileTypes = ['.pdf', '.doc', '.docx', '.txt'];
   const maxFileSize = 50 * 1024 * 1024; // 50MB
 
   const validateFile = (file: File): string | null => {
     const extension = '.' + file.name.split('.').pop()?.toLowerCase();
     
     if (!acceptedFileTypes.includes(extension)) {
-      return `File type ${extension} is not supported. Please upload PDF, DOCX, or TXT files.`;
+      return `File type ${extension} is not supported. Please upload PDF, DOC, DOCX, or TXT files.`;
     }
 
     if (file.size > maxFileSize) {
@@ -157,7 +157,7 @@ const Upload = () => {
       <div className="mb-4 sm:mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Upload Documents</h1>
         <p className="text-gray-600 mt-2 text-sm sm:text-base">
-          Upload PDF, DOCX, or TXT files to add them to the knowledge base
+          Upload PDF, DOC, DOCX, or TXT files to add them to the knowledge base
         </p>
       </div>
 
@@ -182,7 +182,7 @@ const Upload = () => {
           Drag and drop files here, or click to select
         </p>
         <p className="text-xs sm:text-sm text-gray-500 mb-4">
-          Supported formats: PDF, DOCX, TXT (Max size: 50MB)
+          Supported formats: PDF, DOC, DOCX, TXT (Max size: 50MB)
         </p>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -194,7 +194,7 @@ const Upload = () => {
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.docx,.txt"
+          accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
           onChange={handleFileInputChange}
           className="hidden"
         />

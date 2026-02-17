@@ -134,7 +134,7 @@ class DocumentProcessor:
         
         Args:
             file_path: Path to the document file
-            file_extension: File extension (.pdf, .docx, .txt)
+            file_extension: File extension (.pdf, .doc, .docx, .txt)
             title: Document title
             category: Document category
             tags: Document tags
@@ -145,7 +145,7 @@ class DocumentProcessor:
         # Extract text based on file type
         if file_extension == '.pdf':
             text, metadata = await self._extract_pdf(file_path)
-        elif file_extension == '.docx':
+        elif file_extension in ['.doc', '.docx']:
             text, metadata = await self._extract_docx(file_path)
         elif file_extension == '.txt':
             text, metadata = await self._extract_txt(file_path)
@@ -158,8 +158,15 @@ class DocumentProcessor:
         metadata['tags'] = tags or []
         metadata['processed_at'] = datetime.utcnow().isoformat()
         
+        # Debug: log extracted text length
+        print(f"[DEBUG] Extracted text length: {len(text)} characters")
+        if len(text) < 100:
+            print(f"[DEBUG] Full extracted text: {text[:500]}")
+        
         # Chunk the document
         chunks = await self._chunk_text(text, metadata)
+        
+        print(f"[DEBUG] Created {len(chunks)} chunks from document")
         
         return text, chunks, metadata
     
@@ -212,15 +219,27 @@ class DocumentProcessor:
             raise ImportError("No PDF library available. Install PyMuPDF or PyPDF2")
     
     async def _extract_docx(self, file_path: str) -> Tuple[str, Dict]:
-        """Extract text from DOCX file."""
+        """Extract text from DOCX or DOC file."""
         if not HAS_DOCX:
             raise ImportError("python-docx not installed")
         
-        doc = Document(file_path)
+        try:
+            doc = Document(file_path)
+        except Exception as e:
+            # Check if this might be an older .doc file
+            if file_path.lower().endswith('.doc'):
+                raise ValueError(
+                    "This appears to be an older .doc format file. "
+                    "Please save it as .docx in Microsoft Word and try again. "
+                    f"(Error: {str(e)})"
+                )
+            raise
+        
         paragraphs = []
         current_section = None
         metadata = {'type': 'docx', 'sections': []}
         
+        # Extract text from paragraphs
         for para in doc.paragraphs:
             text = para.text.strip()
             if not text:
@@ -236,13 +255,30 @@ class DocumentProcessor:
             else:
                 paragraphs.append(text)
         
+        # Extract text from tables
+        for table in doc.tables:
+            table_text = []
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    cell_text = cell.text.strip()
+                    if cell_text:
+                        row_text.append(cell_text)
+                if row_text:
+                    table_text.append(' | '.join(row_text))
+            if table_text:
+                paragraphs.append('\n'.join(table_text))
+        
         # Extract metadata
         if doc.core_properties.title:
             metadata['title'] = doc.core_properties.title
         if doc.core_properties.author:
             metadata['author'] = doc.core_properties.author
         
-        return '\n\n'.join(paragraphs), metadata
+        full_text = '\n\n'.join(paragraphs)
+        print(f"[DEBUG] Extracted {len(full_text)} characters from DOCX, {len(paragraphs)} sections")
+        
+        return full_text, metadata
     
     async def _extract_txt(self, file_path: str) -> Tuple[str, Dict]:
         """Extract text from TXT file."""

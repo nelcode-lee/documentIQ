@@ -49,10 +49,9 @@ class DocumentGenerationRequest(BaseModel):
             return v
 
         if doc_type == 'principle':
-            required_fields = ['brcClause', 'intent', 'riskOfNonCompliance']
-            for field in required_fields:
-                if field not in v or not v[field]:
-                    raise ValueError(f'Missing required field for principle: {field}')
+            # Only brcClause is required - AI will generate intent and risk if not provided
+            if 'brcClause' not in v or not v.get('brcClause'):
+                raise ValueError('Missing required field for principle: brcClause (search term or clause reference)')
 
         elif doc_type == 'risk-assessment':
             required_fields = ['activityDescription', 'location']

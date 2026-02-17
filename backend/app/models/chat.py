@@ -17,6 +17,8 @@ class ChatResponse(BaseModel):
     response: str
     sources: List[str] = []
     conversation_id: str
+    user_message_id: Optional[str] = None
+    assistant_message_id: Optional[str] = None
 
 
 class ConversationMessage(BaseModel):
@@ -28,6 +30,7 @@ class ConversationMessage(BaseModel):
     timestamp: datetime
     sources: Optional[List[str]] = None
     response_time_ms: Optional[float] = None
+    language: Optional[str] = "en"  # Language code
 
 
 class Conversation(BaseModel):

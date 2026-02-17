@@ -13,13 +13,55 @@ from azure.storage.blob import BlobServiceClient, BlobSasPermissions, generate_b
 from app.config import settings
 from app.services.document_processor import DocumentProcessor
 from app.services.embedding_service import EmbeddingService
-from app.services.vector_store import VectorStoreManager
+from app.services.vector_store import VectorStoreManager, get_vector_store, invalidate_documents_cache
 from app.services.document_store import document_store
 
 
 class LinkDocumentsRequest(BaseModel):
     """Request model for linking documents."""
     relatedDocumentIds: List[str]
+
+
+def detect_document_metadata(title: str, filename: str = None) -> dict:
+    """
+    Auto-detect category and layer from document title/filename.
+    Returns dict with 'category' and 'layer' keys.
+    """
+    text = (title + " " + (filename or "")).lower()
+    
+    # Detect layer
+    layer = None
+    if any(word in text for word in ['policy', 'brc', 'standard', 'requirement']):
+        layer = 'policy'
+    elif any(word in text for word in ['principle', 'quality manual', 'manual']):
+        layer = 'principle'
+    elif any(word in text for word in ['sop', 'procedure', 'fsp', 'work instruction', 'process']):
+        layer = 'sop'
+    
+    # Detect category
+    category = 'General'  # Default
+    
+    category_keywords = {
+        'Food Safety': ['haccp', 'food safety', 'allergen', 'hygiene', 'contamination', 'pathogen'],
+        'Quality': ['quality', 'brc', 'audit', 'inspection', 'compliance', 'standard'],
+        'Health & Safety': ['health', 'safety', 'h&s', 'ppe', 'risk assessment', 'coshh', 'manual handling'],
+        'Operations': ['operation', 'production', 'manufacturing', 'process', 'equipment'],
+        'Metal Detection': ['metal detection', 'metal detector', 'x-ray', 'foreign body'],
+        'Packaging': ['packaging', 'labelling', 'label', 'pack'],
+        'Cleaning': ['cleaning', 'sanitation', 'sanitisation', 'hygiene'],
+        'Pest Control': ['pest', 'vermin', 'rodent', 'insect'],
+        'Training': ['training', 'competency', 'induction'],
+        'Environmental': ['environmental', 'waste', 'energy', 'sustainability'],
+        'Traceability': ['traceability', 'recall', 'withdrawal'],
+        'Supplier': ['supplier', 'vendor', 'procurement', 'approved supplier'],
+    }
+    
+    for cat, keywords in category_keywords.items():
+        if any(keyword in text for keyword in keywords):
+            category = cat
+            break
+    
+    return {'category': category, 'layer': layer}
 
 class SharePointLinkRequest(BaseModel):
     """Request model for updating SharePoint link."""
@@ -73,7 +115,7 @@ async def upload_document(
     """
     try:
         # Validate file type
-        allowed_extensions = ['.pdf', '.docx', '.txt']
+        allowed_extensions = ['.pdf', '.doc', '.docx', '.txt']
         file_extension = '.' + (file.filename or '').split('.')[-1].lower()
         
         if file_extension not in allowed_extensions:
@@ -87,6 +129,13 @@ async def upload_document(
         
         # Use filename as title if not provided
         document_title = title or file.filename or 'Untitled Document'
+        
+        # Auto-detect category and layer if not provided
+        detected = detect_document_metadata(document_title, file.filename)
+        document_category = category if category else detected['category']
+        document_layer = layer if layer else detected['layer']
+        
+        print(f"[INFO] Document metadata - Title: {document_title}, Category: {document_category}, Layer: {document_layer}")
         
         # Parse tags if provided
         document_tags = []
@@ -122,9 +171,9 @@ async def upload_document(
                 temp_file_path=temp_file_path,
                 document_id=document_id,
                 document_title=document_title,
-                category=category,
+                category=document_category,
                 tags=document_tags,
-                layer=layer,  # Pass layer to processing task
+                layer=document_layer,  # Pass auto-detected or provided layer
                 file_extension=file_extension,
                 original_filename=file.filename
             )
@@ -156,214 +205,254 @@ async def upload_document(
 @router.get("/")
 async def list_documents(layer: Optional[str] = None) -> List[DocumentResponse]:
     """
-    List all documents from Azure AI Search and Blob Storage.
+    List all documents from vector store (Supabase or Azure AI Search).
     
-    Fetches unique documents by grouping chunks by documentId,
-    and includes metadata from both Azure AI Search and Blob Storage.
+    Fetches unique documents by grouping chunks by documentId.
     """
     try:
-        from azure.search.documents import SearchClient
-        from azure.core.credentials import AzureKeyCredential
-        from azure.storage.blob import BlobServiceClient
         import json
         
-        # Initialize clients
-        search_credential = AzureKeyCredential(settings.azure_search_api_key)
-        search_client = SearchClient(
-            endpoint=settings.azure_search_endpoint,
-            index_name=settings.azure_search_index_name,
-            credential=search_credential
-        )
+        # Use singleton vector store manager (faster - no client recreation)
+        vector_store = get_vector_store()
         
-        blob_service_client = BlobServiceClient.from_connection_string(
-            settings.azure_storage_connection_string
-        )
-        container_client = blob_service_client.get_container_client(
-            settings.azure_storage_container_name
-        )
-        
-        # Optimize: Fetch chunks and extract unique documents
-        # Increase limit to ensure we get all documents even with many chunks
-        # Use same field selection as check_documents.py (which works)
-        # Only select fields that definitely exist in the index
-        # Try to get metadata and uploadedAt, but don't fail if they don't exist
-        try:
-            results = search_client.search(
-                search_text="*",
-                top=2000,  # Increased limit to handle documents with many chunks
-                select=["documentId", "title", "category", "tags", "metadata", "uploadedAt", "chunkIndex"]
-            )
-        except Exception as search_error:
-            # If that fails, try with minimal fields
-            print(f"[WARNING] Search with all fields failed, trying minimal fields: {search_error}")
-            results = search_client.search(
-                search_text="*",
-                top=2000,  # Increased limit
-                select=["documentId", "title", "category", "chunkIndex"]
-            )
-        
-        # Convert to list to avoid lazy iteration issues
-        try:
-            results_list = list(results)
-            print(f"[INFO] Retrieved {len(results_list)} chunks from search index")
-        except Exception as list_error:
-            print(f"[ERROR] Failed to convert search results to list: {list_error}")
-            import traceback
-            traceback.print_exc()
-            results_list = []
-        
-        if len(results_list) == 0:
-            print("[WARNING] No chunks found in search index!")
-            print("[DEBUG] This could mean:")
-            print("  1. Index is empty")
-            print("  2. Connection issue to Azure AI Search")
-            print("  3. Index name mismatch")
-            print(f"[DEBUG] Using index: {settings.azure_search_index_name}")
-            print(f"[DEBUG] Using endpoint: {settings.azure_search_endpoint}")
-            # Return empty list if no chunks found (this is a valid state for empty index)
-            return []
-        
-        # Group by documentId (take first chunk of each document for metadata)
-        documents_dict = {}
-        seen_doc_ids = set()
-        
-        print(f"[DEBUG] Processing {len(results_list)} chunks...")
-        for result in results_list:
-            doc_id = result.get("documentId")
-            if not doc_id:
-                continue
+        # Check if using Supabase
+        if vector_store.use_supabase and vector_store.supabase_client:
+            print("[INFO] Listing documents from Supabase...")
             
-            # Only process the first chunk we see for each document (they all have same metadata)
-            if doc_id in seen_doc_ids:
-                continue
-            
-            seen_doc_ids.add(doc_id)
-            
-            # Parse metadata
-            metadata_str = result.get("metadata")
-            metadata = {}
-            if metadata_str:
-                try:
-                    metadata = json.loads(metadata_str) if isinstance(metadata_str, str) else metadata_str
-                except:
-                    pass
-            
-            # Get uploadedAt from result or metadata
-            uploaded_at = result.get("uploadedAt")
-            if not uploaded_at and metadata.get("processed_at"):
-                uploaded_at = metadata.get("processed_at")
-            
-            # Format uploadedAt properly
+            # Get all unique documents from Supabase using pagination
+            # (Supabase default limit is 1000 rows)
             try:
-                if uploaded_at:
-                    if hasattr(uploaded_at, 'isoformat'):
-                        uploaded_at_str = uploaded_at.isoformat()
-                    elif isinstance(uploaded_at, str):
-                        uploaded_at_str = uploaded_at
+                documents_dict = {}
+                page_size = 1000
+                offset = 0
+                
+                while True:
+                    result = vector_store.supabase_client.table("documents").select(
+                        "document_id, title, category, tags, metadata, created_at, chunk_index"
+                    ).range(offset, offset + page_size - 1).execute()
+                    
+                    if not result.data:
+                        break
+                    
+                    # Group by document_id
+                    for row in result.data:
+                        doc_id = row.get("document_id")
+                        if not doc_id or doc_id in documents_dict:
+                            continue
+                        
+                        metadata = row.get("metadata") or {}
+                        doc_layer = metadata.get("layer")
+                        
+                        # Format created_at
+                        created_at = row.get("created_at")
+                        if created_at:
+                            if isinstance(created_at, str):
+                                uploaded_at_str = created_at
+                            else:
+                                uploaded_at_str = datetime.utcnow().isoformat()
+                        else:
+                            uploaded_at_str = datetime.utcnow().isoformat()
+                        
+                        documents_dict[doc_id] = {
+                            "id": doc_id,
+                            "title": row.get("title", "Untitled Document"),
+                            "category": row.get("category"),
+                            "tags": row.get("tags") or [],
+                            "layer": doc_layer,
+                            "uploadedAt": uploaded_at_str,
+                            "status": "completed",
+                            "source": "uploaded",
+                            "metadata": metadata,
+                            "sharePointUrl": metadata.get("sharePointUrl")
+                        }
+                    
+                    # If we got fewer rows than page_size, we've reached the end
+                    if len(result.data) < page_size:
+                        break
+                    
+                    offset += page_size
+                
+                print(f"[INFO] Found {len(documents_dict)} unique documents in Supabase")
+                
+                # Get file info from Supabase Storage
+                blob_dict = {}
+                try:
+                    storage_bucket = settings.supabase_storage_bucket or "Tech_standards_bucket"
+                    files = vector_store.supabase_client.storage.from_(storage_bucket).list("uploads")
+                    for f in files:
+                        blob_dict[f.get("name", "")] = {
+                            "fileSize": f.get("metadata", {}).get("size"),
+                            "fileType": f.get("name", "").split('.')[-1].lower() if '.' in f.get("name", "") else None
+                        }
+                    print(f"[DEBUG] Found {len(blob_dict)} files in Supabase storage")
+                except Exception as storage_error:
+                    print(f"[WARNING] Error accessing Supabase storage: {storage_error}")
+                
+                # Build document list
+                documents_list = []
+                for doc_id, doc_info in documents_dict.items():
+                    if layer and doc_info.get("layer") != layer:
+                        continue
+                    
+                    # Try to find file for this document
+                    blob_info = None
+                    download_url = None
+                    for blob_name, blob_data in blob_dict.items():
+                        if blob_name.startswith(doc_id):
+                            blob_info = blob_data
+                            # Generate download URL
+                            try:
+                                storage_bucket = settings.supabase_storage_bucket or "Tech_standards_bucket"
+                                download_url = vector_store.supabase_client.storage.from_(storage_bucket).get_public_url(f"uploads/{blob_name}")
+                            except:
+                                pass
+                            break
+                    
+                    doc_response = DocumentResponse(
+                        id=doc_info["id"],
+                        title=doc_info["title"],
+                        category=doc_info.get("category"),
+                        tags=doc_info.get("tags", []),
+                        layer=doc_info.get("layer"),
+                        uploadedAt=doc_info["uploadedAt"],
+                        status=doc_info["status"],
+                        source=doc_info.get("source", "uploaded"),
+                        fileType=blob_info.get("fileType") if blob_info else None,
+                        fileSize=blob_info.get("fileSize") if blob_info else None,
+                        downloadUrl=download_url,
+                        sharePointUrl=doc_info.get("sharePointUrl")
+                    )
+                    documents_list.append(doc_response)
+                
+            except Exception as supabase_error:
+                print(f"[ERROR] Supabase query failed: {supabase_error}")
+                import traceback
+                traceback.print_exc()
+                documents_list = []
+        
+        # Fallback to Azure if configured
+        elif vector_store.use_azure and vector_store.search_client:
+            print("[INFO] Listing documents from Azure AI Search...")
+            from azure.storage.blob import BlobServiceClient
+            
+            blob_service_client = BlobServiceClient.from_connection_string(
+                settings.azure_storage_connection_string
+            )
+            container_client = blob_service_client.get_container_client(
+                settings.azure_storage_container_name
+            )
+            
+            try:
+                results = vector_store.search_client.search(
+                    search_text="*",
+                    top=2000,
+                    select=["documentId", "title", "category", "tags", "metadata", "uploadedAt", "chunkIndex"]
+                )
+            except Exception as search_error:
+                print(f"[WARNING] Search with all fields failed: {search_error}")
+                results = vector_store.search_client.search(
+                    search_text="*",
+                    top=2000,
+                    select=["documentId", "title", "category", "chunkIndex"]
+                )
+            
+            results_list = list(results)
+            print(f"[INFO] Retrieved {len(results_list)} chunks from Azure")
+            
+            documents_dict = {}
+            for result in results_list:
+                doc_id = result.get("documentId")
+                if not doc_id or doc_id in documents_dict:
+                    continue
+                
+                metadata_str = result.get("metadata")
+                metadata = {}
+                if metadata_str:
+                    try:
+                        metadata = json.loads(metadata_str) if isinstance(metadata_str, str) else metadata_str
+                    except:
+                        pass
+                
+                uploaded_at = result.get("uploadedAt")
+                if not uploaded_at and metadata.get("processed_at"):
+                    uploaded_at = metadata.get("processed_at")
+                
+                try:
+                    if uploaded_at:
+                        if hasattr(uploaded_at, 'isoformat'):
+                            uploaded_at_str = uploaded_at.isoformat()
+                        elif isinstance(uploaded_at, str):
+                            uploaded_at_str = uploaded_at
+                        else:
+                            uploaded_at_str = datetime.utcnow().isoformat()
                     else:
                         uploaded_at_str = datetime.utcnow().isoformat()
-                else:
+                except:
                     uploaded_at_str = datetime.utcnow().isoformat()
-            except Exception as e:
-                print(f"[WARNING] Error formatting uploadedAt for {doc_id}: {e}")
-                uploaded_at_str = datetime.utcnow().isoformat()
-            
-            # Extract layer from metadata (field doesn't exist in index schema yet, stored in metadata)
-            doc_layer = None
-            if metadata and metadata.get("layer"):
-                doc_layer = metadata.get("layer")
-            # Also try getting from result directly if it exists (for future compatibility)
-            if not doc_layer:
-                doc_layer = result.get("layer")
-            
-            # Extract SharePoint URL from metadata
-            sharepoint_url = None
-            if metadata and metadata.get("sharePointUrl"):
-                sharepoint_url = metadata.get("sharePointUrl")
-            
-            # Ensure tags is a list
-            doc_tags = result.get("tags", [])
-            if doc_tags is None:
-                doc_tags = []
-            elif not isinstance(doc_tags, list):
-                doc_tags = [doc_tags] if doc_tags else []
-            
-            documents_dict[doc_id] = {
-                "id": doc_id,
-                "title": result.get("title", "Untitled Document"),
-                "category": result.get("category"),
-                "tags": doc_tags,
-                "layer": doc_layer,  # Extract layer from result or metadata
-                "uploadedAt": uploaded_at_str,
-                "status": "completed",
-                "source": "uploaded",
-                "metadata": metadata,
-                "sharePointUrl": sharepoint_url
-            }
-        
-        # Get file information from Blob Storage
-        try:
-            blob_list = container_client.list_blobs()
-            blob_dict = {}
-            for blob in blob_list:
-                blob_dict[blob.name] = {
-                    "fileSize": blob.size,
-                    "lastModified": blob.last_modified.isoformat() if hasattr(blob.last_modified, 'isoformat') else None,
-                    "fileType": blob.name.split('.')[-1].lower() if '.' in blob.name else None
+                
+                doc_layer = metadata.get("layer") or result.get("layer")
+                doc_tags = result.get("tags", [])
+                if not isinstance(doc_tags, list):
+                    doc_tags = [doc_tags] if doc_tags else []
+                
+                documents_dict[doc_id] = {
+                    "id": doc_id,
+                    "title": result.get("title", "Untitled Document"),
+                    "category": result.get("category"),
+                    "tags": doc_tags,
+                    "layer": doc_layer,
+                    "uploadedAt": uploaded_at_str,
+                    "status": "completed",
+                    "source": "uploaded",
+                    "metadata": metadata,
+                    "sharePointUrl": metadata.get("sharePointUrl")
                 }
-            print(f"[DEBUG] Found {len(blob_dict)} blobs in storage")
-        except Exception as blob_error:
-            print(f"[WARNING] Error accessing blob storage (continuing anyway): {blob_error}")
-            blob_dict = {}  # Continue without blob metadata
-        
-        # Merge blob metadata with document info
-        documents_list = []
-        for doc_id, doc_info in documents_dict.items():
-            # Apply layer filter if specified
-            if layer and doc_info.get("layer") != layer:
-                continue
             
-            # Try to find blob for this document
-            # Blob name format: {document_id}.{extension}
-            blob_info = None
-            for blob_name, blob_data in blob_dict.items():
-                if blob_name.startswith(doc_id):
-                    blob_info = blob_data
-                    break
+            # Get blob info
+            try:
+                blob_dict = {}
+                for blob in container_client.list_blobs():
+                    blob_dict[blob.name] = {
+                        "fileSize": blob.size,
+                        "fileType": blob.name.split('.')[-1].lower() if '.' in blob.name else None
+                    }
+            except:
+                blob_dict = {}
             
-            # Generate download URL for uploaded documents
-            download_url = None
-            if blob_info:
-                # Find the actual blob name
-                blob_name = None
-                for name in blob_dict.keys():
-                    if name.startswith(doc_id):
-                        blob_name = name
+            documents_list = []
+            for doc_id, doc_info in documents_dict.items():
+                if layer and doc_info.get("layer") != layer:
+                    continue
+                
+                blob_info = None
+                download_url = None
+                for blob_name, blob_data in blob_dict.items():
+                    if blob_name.startswith(doc_id):
+                        blob_info = blob_data
+                        download_url = generate_blob_download_url(blob_name, settings.azure_storage_container_name)
                         break
-
-                if blob_name:
-                    download_url = generate_blob_download_url(blob_name, settings.azure_storage_container_name)
-
-            # Build document response
-            doc_response = DocumentResponse(
-                id=doc_info["id"],
-                title=doc_info["title"],
-                category=doc_info.get("category"),
-                tags=doc_info.get("tags", []),
-                layer=doc_info.get("layer"),  # Include layer
-                uploadedAt=doc_info["uploadedAt"],
-                status=doc_info["status"],
-                source=doc_info.get("source", "uploaded"),
-                fileType=blob_info.get("fileType") if blob_info else None,
-                fileSize=blob_info.get("fileSize") if blob_info else None,
-                downloadUrl=download_url,
-                sharePointUrl=doc_info.get("sharePointUrl")
-            )
-            
-            documents_list.append(doc_response)
+                
+                doc_response = DocumentResponse(
+                    id=doc_info["id"],
+                    title=doc_info["title"],
+                    category=doc_info.get("category"),
+                    tags=doc_info.get("tags", []),
+                    layer=doc_info.get("layer"),
+                    uploadedAt=doc_info["uploadedAt"],
+                    status=doc_info["status"],
+                    source=doc_info.get("source", "uploaded"),
+                    fileType=blob_info.get("fileType") if blob_info else None,
+                    fileSize=blob_info.get("fileSize") if blob_info else None,
+                    downloadUrl=download_url,
+                    sharePointUrl=doc_info.get("sharePointUrl")
+                )
+                documents_list.append(doc_response)
         
-        print(f"[DEBUG] Created {len(documents_dict)} unique documents from chunks")
-        print(f"[DEBUG] Created {len(documents_list)} documents after blob merge")
+        else:
+            print("[WARNING] No vector store backend configured")
+            documents_list = []
+        
+        print(f"[DEBUG] Created {len(documents_list)} documents")
         
         # Also get generated documents from document_store
         try:
@@ -528,21 +617,21 @@ async def delete_document(document_id: str):
     3. Remove from generated documents store if applicable
     """
     try:
-        from app.services.vector_store import VectorStoreManager
-        from app.services.document_store import document_store
         import os
         
         deleted_items = []
         errors = []
         
-        # 1. Delete from Azure AI Search (all chunks)
+        # 1. Delete from vector store (all chunks)
         try:
-            vector_store = VectorStoreManager()
+            vector_store = get_vector_store()
             success = await vector_store.delete_document(document_id)
             if success:
-                deleted_items.append("Azure AI Search chunks")
+                deleted_items.append("Vector store chunks")
+                # Invalidate cache so deleted document disappears immediately
+                invalidate_documents_cache()
             else:
-                errors.append("Failed to delete from Azure AI Search")
+                errors.append("Failed to delete from vector store")
         except Exception as e:
             print(f"[ERROR] Failed to delete from Azure AI Search: {e}")
             errors.append(f"Azure AI Search: {str(e)}")
@@ -636,12 +725,10 @@ async def update_document(
     3. Re-process the document
     """
     try:
-        from app.services.vector_store import VectorStoreManager
-        
         # If file is provided, replace the entire document
         if file:
             # Validate file type
-            allowed_extensions = ['.pdf', '.docx', '.txt']
+            allowed_extensions = ['.pdf', '.doc', '.docx', '.txt']
             file_extension = '.' + (file.filename or '').split('.')[-1].lower()
             
             if file_extension not in allowed_extensions:
@@ -653,7 +740,7 @@ async def update_document(
             # Delete old document first
             try:
                 # Delete from Azure AI Search
-                vector_store = VectorStoreManager()
+                vector_store = get_vector_store()
                 await vector_store.delete_document(document_id)
                 
                 # Delete from Blob Storage
@@ -739,7 +826,7 @@ async def update_document(
                     except:
                         document_tags = [tag.strip() for tag in tags.split(',') if tag.strip()]
                 
-                vector_store = VectorStoreManager()
+                vector_store = get_vector_store()
                 
                 # Search for all chunks of this document
                 search_client = vector_store.search_client
@@ -950,28 +1037,55 @@ async def process_document_task(
     Background task to process uploaded document.
     
     This function:
-    1. Uploads file to Azure Blob Storage
+    1. Uploads file to Supabase Storage or Azure Blob Storage
     2. Extracts text and chunks document
     3. Generates embeddings
-    4. Stores in Azure AI Search
+    4. Stores in vector store (Supabase pgvector or Azure AI Search)
     """
     blob_url = None
+    use_supabase = bool(settings.supabase_url and settings.supabase_anon_key)
     
     try:
-        # 1. Upload to Azure Blob Storage
-        blob_service_client = BlobServiceClient.from_connection_string(
-            settings.azure_storage_connection_string
-        )
-        blob_client = blob_service_client.get_blob_client(
-            container=settings.azure_storage_container_name,
-            blob=f"{document_id}{file_extension}"
-        )
+        # 1. Upload to storage (Supabase or Azure)
+        if use_supabase:
+            try:
+                from app.services.supabase_service import get_supabase_client
+                supabase_client = get_supabase_client()
+                if not supabase_client:
+                    raise Exception("Supabase client not available")
+                storage_bucket = settings.supabase_storage_bucket or "Tech_standards_bucket"
+                storage_path = f"uploads/{document_id}{file_extension}"
+                
+                with open(temp_file_path, "rb") as data:
+                    file_content = data.read()
+                
+                # Upload to Supabase Storage
+                supabase_client.storage.from_(storage_bucket).upload(
+                    storage_path,
+                    file_content,
+                    {"upsert": "true"}
+                )
+                
+                blob_url = supabase_client.storage.from_(storage_bucket).get_public_url(storage_path)
+                print(f"[OK] Uploaded {document_id} to Supabase Storage: {blob_url}")
+            except Exception as supabase_error:
+                print(f"[WARNING] Supabase upload failed: {supabase_error}")
+                use_supabase = False
         
-        with open(temp_file_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-        
-        blob_url = blob_client.url
-        print(f"[OK] Uploaded {document_id} to Blob Storage: {blob_url}")
+        if not use_supabase and settings.azure_storage_connection_string:
+            blob_service_client = BlobServiceClient.from_connection_string(
+                settings.azure_storage_connection_string
+            )
+            blob_client = blob_service_client.get_blob_client(
+                container=settings.azure_storage_container_name,
+                blob=f"{document_id}{file_extension}"
+            )
+            
+            with open(temp_file_path, "rb") as data:
+                blob_client.upload_blob(data, overwrite=True)
+            
+            blob_url = blob_client.url
+            print(f"[OK] Uploaded {document_id} to Azure Blob Storage: {blob_url}")
         
         # 2. Process document (extract text and chunk)
         processor = DocumentProcessor(
@@ -1009,7 +1123,7 @@ async def process_document_task(
         print(f"[OK] Generated {len(embeddings)} embeddings")
         
         # 4. Store in Azure AI Search
-        vector_store = VectorStoreManager()
+        vector_store = get_vector_store()
         
         # Prepare documents for batch upload
         uploaded_at = datetime.utcnow()
@@ -1044,6 +1158,8 @@ async def process_document_task(
         
         if success:
             print(f"[OK] Successfully indexed {len(documents_to_index)} chunks for document {document_id}")
+            # Invalidate cache so new document appears immediately
+            invalidate_documents_cache()
         else:
             print(f"[WARNING] Some chunks may have failed to index for document {document_id}")
         

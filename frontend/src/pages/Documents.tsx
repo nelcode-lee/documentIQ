@@ -123,7 +123,7 @@ const Documents = () => {
     });
 
     return filtered;
-  }, [documents, searchQuery, filter, selectedCategory, sortBy]);
+  }, [documents, searchQuery, filter, selectedCategory, layerFilter, sortBy]);
 
   const categories = useMemo(() => {
     return Array.from(

@@ -94,14 +94,14 @@ class DocumentGenerator:
         return {"content": content}
 
     async def _get_relevant_standards(self, document_type: str, data: Dict[str, Any]) -> str:
-        """Get relevant standards from the knowledge base."""
+        """Get relevant standards from the knowledge base with actual document references."""
         try:
             # Create a search query based on document type and data
             search_terms = []
 
             if document_type == "principle":
                 # For Principles, search for related BRC clauses and policy documents
-                search_terms.extend(["BRC clause", "policy", "quality manual", "compliance"])
+                search_terms.extend(["BRC clause", "policy", "quality manual", "compliance", "procedure", "SOP", "FSP"])
                 if "brcClause" in data:
                     search_terms.append(data["brcClause"][:100])
                 if "clauseNumber" in data:
@@ -123,16 +123,26 @@ class DocumentGenerator:
             query_embedding = self.chat_service.embedding_service.generate_embedding(query)
             results = await self.vector_store.search(
                 query_embedding=query_embedding,
-                top_k=5,
+                top_k=10,  # Get more results to find relevant SOPs
                 query_text=query
             )
 
             if results:
-                standards_text = "\n\nRelevant Standards from Knowledge Base:\n"
+                # Build a structured list of actual documents
+                standards_text = "\n\n=== DOCUMENTS IN YOUR LIBRARY (USE THESE EXACT REFERENCES) ===\n"
+                seen_titles = set()
+                
                 for result in results:
                     title = result.get('title', 'Unknown Document')
-                    content = result.get('content', '')[:500]  # Limit content length
-                    standards_text += f"\n**{title}:**\n{content}...\n"
+                    if title in seen_titles:
+                        continue
+                    seen_titles.add(title)
+                    
+                    content = result.get('content', '')[:400]
+                    standards_text += f"\n📄 **{title}**\n"
+                    standards_text += f"   Content preview: {content}...\n"
+                
+                standards_text += "\n=== END OF LIBRARY DOCUMENTS ===\n"
                 return standards_text
 
         except Exception as e:
@@ -144,7 +154,7 @@ class DocumentGenerator:
         """Analyze existing SOPs to extract common themes and identify gaps."""
         try:
             # Search for SOP documents in the knowledge base
-            query = f"SOP standard operating procedure {principle_topic}"
+            query = f"SOP standard operating procedure FSP procedure {principle_topic}"
             query_embedding = self.chat_service.embedding_service.generate_embedding(query)
             results = await self.vector_store.search(
                 query_embedding=query_embedding,
@@ -153,32 +163,42 @@ class DocumentGenerator:
             )
 
             if not results:
-                return ""
+                return "No existing SOPs found in the library for this topic."
+
+            # Build list of actual SOP documents found
+            sop_list = []
+            seen_titles = set()
+            for r in results[:7]:
+                title = r.get('title', '')
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    sop_list.append({
+                        'title': title,
+                        'content': r.get('content', '')[:400]
+                    })
 
             # Extract common themes from SOPs
             sop_analysis_prompt = f"""
-            Analyze the following SOP documents and extract:
-            1. Common controls and procedures across departments
-            2. Cross-functional interactions
-            3. Consistency indicators
-            4. Variability or gaps
-            5. Behavior expectations
-            6. What should be elevated into a Principle
+            Analyze the following ACTUAL SOP documents from the library:
 
-            SOP Documents:
-            {json.dumps([{'title': r.get('title', ''), 'content': r.get('content', '')[:500]} for r in results[:5]], indent=2)}
+            {json.dumps(sop_list, indent=2)}
 
-            Provide a structured analysis focusing on what is common, what is inconsistent, and what should be documented as a Principle.
+            Provide a brief analysis:
+            1. Which of these documents are relevant to the Principle being created?
+            2. What common controls do they share?
+            3. Are there any gaps - procedures that SHOULD exist but don't?
+
+            IMPORTANT: Reference documents by their EXACT titles as shown above.
             """
 
             analysis_response = await self.chat_service.chat(
                 query=sop_analysis_prompt,
                 language="en",
                 temperature=0.3,
-                max_tokens=2000
+                max_tokens=1500
             )
 
-            return analysis_response["response"]
+            return f"EXISTING DOCUMENTS FOUND:\n{chr(10).join(['- ' + s['title'] for s in sop_list])}\n\nANALYSIS:\n{analysis_response['response']}"
 
         except Exception as e:
             print(f"Error analyzing SOPs: {e}")
@@ -189,16 +209,190 @@ class DocumentGenerator:
         document_reference: Optional[str] = None, issue_date: Optional[str] = None,
         layer: Optional[str] = None
     ) -> str:
-        """Generate a Principle document following the structured template."""
+        """Generate a Principle document - AI does the heavy lifting from search terms."""
         
         formatted_issue_date = issue_date if issue_date else datetime.now().strftime('%Y-%m-%d')
         
-        # Analyze existing SOPs if requested
-        sop_analysis = ""
-        if data.get('analyzeExistingSOPs'):
-            sop_analysis = await self._analyze_existing_sops(data.get('brcClause', title))
+        # Get the search term (BRC clause reference or topic)
+        search_term = data.get('brcClause', title)
+        clause_number = data.get('clauseNumber', '')
+        additional_context = data.get('additionalContext', '')
         
-        prompt = f"""
+        # Analyze existing SOPs
+        sop_analysis = ""
+        if data.get('analyzeExistingSOPs', True):
+            sop_analysis = await self._analyze_existing_sops(search_term)
+        
+        # Check if user provided detailed input or just search terms
+        has_detailed_input = bool(
+            data.get('intent') or 
+            data.get('riskOfNonCompliance') or 
+            (data.get('coreCommitments') and data.get('coreCommitments')[0]) or
+            (data.get('evidenceExpectations') and data.get('evidenceExpectations')[0])
+        )
+        
+        if has_detailed_input:
+            # User provided details - use them
+            prompt = self._build_detailed_principle_prompt(
+                title, author, data, standards, sop_analysis,
+                document_reference, formatted_issue_date
+            )
+        else:
+            # Simplified mode - AI generates everything from search
+            prompt = f"""
+You are an expert in BRC Food Safety Standards and Quality Management Systems.
+Generate a comprehensive Principle document based on the following search/topic.
+
+SEARCH TERM / BRC CLAUSE: {search_term}
+{f'CLAUSE NUMBER: {clause_number}' if clause_number else ''}
+{f'ADDITIONAL CONTEXT: {additional_context}' if additional_context else ''}
+
+RELEVANT DOCUMENTS FROM KNOWLEDGE BASE:
+{standards}
+
+{f'ANALYSIS OF EXISTING SOPs:{chr(10)}{sop_analysis}' if sop_analysis else ''}
+
+Based on the above information, create a COMPLETE Principle document.
+YOU MUST generate ALL sections - do not leave any blank or say "to be determined".
+
+=== DOCUMENT FORMAT ===
+
+# PRINCIPLE DOCUMENT
+
+**Document Reference:** {document_reference or 'PRIN-' + datetime.now().strftime('%Y%m%d')}
+**Issue Date:** {formatted_issue_date}
+**Title:** {title}
+**Author:** {author}
+**Version:** 1.0
+
+---
+
+## 1. BRC CLAUSE / POLICY REFERENCE
+
+[Quote or describe the relevant BRC clause based on your search. If the exact clause text is in the knowledge base, quote it. Otherwise, describe what standard/requirement this Principle addresses.]
+
+## 2. INTENT OF THE CLAUSE
+
+[Explain in 2-3 paragraphs:
+- What this clause is intended to achieve
+- Why it exists in the BRC standard
+- The underlying food safety/quality objective]
+
+## 3. RISK OF NON-COMPLIANCE
+
+[Clearly articulate the risks if this clause is not met:
+- Food safety risks
+- Quality impacts
+- Regulatory/audit consequences
+- Business/reputational risks]
+
+## 4. CORE ORGANISATIONAL COMMITMENTS
+
+[List 4-6 key commitments the organization makes to meet this clause. These are high-level promises that guide operations.]
+
+- Commitment 1
+- Commitment 2
+- Commitment 3
+- Commitment 4
+
+## 5. EVIDENCE EXPECTATIONS
+
+**How do we PROVE we meet this clause?**
+
+[This is the critical section - list specific evidence types:]
+
+| Evidence Type | Description | Frequency | Owner |
+|--------------|-------------|-----------|-------|
+| [Record type] | [What it demonstrates] | [How often] | [Role] |
+
+## 6. CROSS-FUNCTIONAL RESPONSIBILITIES
+
+[Define responsibilities for EACH function - this ensures consistency across departments:]
+
+### Technical
+[Technical team's specific responsibilities for this Principle]
+
+### Health & Safety
+[H&S team's specific responsibilities]
+
+### Environment
+[Environmental team's responsibilities]
+
+### Operations
+[Operations team's responsibilities]
+
+### HR
+[HR's responsibilities - training, competency, etc.]
+
+### Quality
+[Quality team's responsibilities - verification, audit, etc.]
+
+## 7. LINKED SOPs AND PROCEDURES
+
+**IMPORTANT: Only reference documents that EXIST in the library above. Use their EXACT titles.**
+
+| Document Reference | Title (EXACT from library) | Relevance to this Principle |
+|-------------------|---------------------------|----------------------------|
+| [Use exact title from library] | [Exact title] | [How it implements this Principle] |
+
+### Documents Recommended to Add to Library
+
+If there are SOPs or procedures that SHOULD exist to support this Principle but are NOT in the library above, list them here:
+
+| Recommended Document | Purpose | Priority |
+|---------------------|---------|----------|
+| [Suggested title] | [Why it's needed] | High/Medium/Low |
+
+## 8. CONTROLS AND VERIFICATION
+
+[List key controls that support compliance:]
+
+- Control 1
+- Control 2
+- Control 3
+
+**Verification Method:** [How compliance is verified]
+**Verification Frequency:** [How often]
+
+## 9. REVIEW AND APPROVAL
+
+| Role | Name | Signature | Date |
+|------|------|-----------|------|
+| Author | {author} | | {formatted_issue_date} |
+| Reviewer | | | |
+| Approver | | | |
+
+**Next Review Date:** [12 months from issue]
+
+---
+
+CRITICAL INSTRUCTIONS:
+1. Generate REAL content for ALL sections - do not use placeholders
+2. Use professional quality management language
+3. Be specific and practical - this document will be used operationally
+4. **ONLY reference documents that are listed in "DOCUMENTS IN YOUR LIBRARY" section above**
+5. **Use the EXACT document titles from the library - do NOT invent reference numbers like "SOP-001"**
+6. If you need to reference a document that doesn't exist, put it in "Documents Recommended to Add to Library"
+7. Ensure cross-functional responsibilities are distinct and clear
+8. The Evidence Expectations section is the MOST important - be thorough
+9. Format tables properly with | separators
+"""
+
+        response = await self.chat_service.chat(
+            query=prompt,
+            language="en",
+            temperature=0.4,  # Slightly higher for more creative content generation
+            max_tokens=4000  # Model limit is 4096
+        )
+
+        return response["response"]
+    
+    def _build_detailed_principle_prompt(
+        self, title: str, author: str, data: Dict[str, Any], standards: str,
+        sop_analysis: str, document_reference: Optional[str], formatted_issue_date: str
+    ) -> str:
+        """Build prompt when user has provided detailed input."""
+        return f"""
         Generate a comprehensive Principle document (Quality Manual layer) that bridges Policy and SOPs.
         This document explains "How do we prove we meet each policy clause?"
 
@@ -229,86 +423,20 @@ class DocumentGenerator:
 
         {standards}
 
-        {f'SOP ANALYSIS:\n{sop_analysis}' if sop_analysis else ''}
+        {f'SOP ANALYSIS:{chr(10)}{sop_analysis}' if sop_analysis else ''}
 
-        Create a professional Principle document following this EXACT structure:
+        Create a professional Principle document with all the standard sections:
+        1. BRC Clause Reference
+        2. Intent of the Clause
+        3. Risk of Non-Compliance
+        4. Core Organisational Commitments
+        5. Evidence Expectations (most important - how we PROVE compliance)
+        6. Cross-Functional Responsibilities (Technical, H&S, Environment, Operations, HR)
+        7. Linked SOPs and Controls
+        8. Review and Approval
 
-        DOCUMENT HEADER:
-        - Document Reference: {document_reference or 'TBD'}
-        - Issue Date: {formatted_issue_date}
-        - Document Title: {title}
-        - Author: {author}
-        - BRC Clause Number: {data.get('clauseNumber', 'N/A')}
-
-        DOCUMENT BODY (follow this structure exactly):
-
-        1. BRC CLAUSE REFERENCE
-           - Quote the BRC clause or policy requirement
-           - Reference number if provided
-
-        2. INTENT OF THE CLAUSE
-           - Explain what this clause is intended to achieve
-           - Why it exists in the BRC standard
-           - {data.get('intent', '')}
-
-        3. RISK OF NON-COMPLIANCE
-           - Clearly articulate the risks if this clause is not met
-           - Impact on food safety, quality, or regulatory compliance
-           - {data.get('riskOfNonCompliance', '')}
-
-        4. CORE ORGANISATIONAL COMMITMENTS
-           - List the key commitments the organization makes to meet this clause
-           - These are high-level promises that guide all operations
-           - {json.dumps(data.get('coreCommitments', []), indent=2)}
-
-        5. EVIDENCE EXPECTATIONS
-           - Define what evidence demonstrates compliance with this clause
-           - Types of records, documentation, or proof required
-           - How compliance is measured and verified
-           - {json.dumps(data.get('evidenceExpectations', []), indent=2)}
-
-        6. CROSS-FUNCTIONAL RESPONSIBILITIES
-           - Define responsibilities for each function:
-             * Technical
-             * Health & Safety (H&S)
-             * Environment
-             * Operations
-             * HR
-           - Ensure consistent expectations across all functions
-           - {json.dumps(data.get('crossFunctionalResponsibilities', []), indent=2)}
-
-        7. DECISION LOGIC / RATIONALE
-           - Explain the decision logic behind this Principle
-           - Rationale for the approach taken
-           - {data.get('decisionLogic', 'Not specified')}
-
-        8. LINKED SOPs AND CONTROLS
-           - Reference related SOPs that implement this Principle
-           - Key controls that support compliance
-           - {f'Include analysis of existing SOPs:\n{sop_analysis}' if sop_analysis else 'Reference SOPs that implement this Principle'}
-
-        9. REVIEW AND APPROVAL
-           - Review date: {data.get('reviewDate', datetime.now().strftime('%Y-%m-%d'))}
-           - Approval section
-
-        CRITICAL REQUIREMENTS:
-        - This is a PRINCIPLE document - it bridges Policy and SOPs
-        - Focus on "How do we prove we meet each policy clause?"
-        - Define consistent expectations across ALL functions
-        - Use professional quality-management language
-        - Ensure cross-references to related documents
-        - Make it clear how SOPs will implement this Principle
-        - Format professionally with clear sections and subsections
+        Use the provided information and expand where needed. Be specific and practical.
         """
-
-        response = await self.chat_service.chat(
-            query=prompt,
-            language="en",
-            temperature=0.3,
-            max_tokens=5000  # More tokens for comprehensive Principle documents
-        )
-
-        return response["response"]
 
     async def _generate_risk_assessment(
         self, title: str, author: str, data: Dict[str, Any], standards: str,

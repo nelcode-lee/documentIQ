@@ -92,7 +92,9 @@ async def chat_endpoint(request: ChatRequest):
         response = ChatResponse(
             response=result["response"],
             sources=result["sources"],
-            conversation_id=result["conversation_id"]
+            conversation_id=result["conversation_id"],
+            user_message_id=user_message.id,
+            assistant_message_id=assistant_message.id
         )
 
         return response

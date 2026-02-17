@@ -12,19 +12,29 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4"  # or "gpt-4-turbo", "gpt-3.5-turbo"
     openai_embedding_model: str = "text-embedding-ada-002"
     
-    # Azure AI Search
-    azure_search_endpoint: str
-    azure_search_api_key: str
-    azure_search_index_name: str
+    # Azure AI Search (optional - can use Supabase pgvector instead)
+    azure_search_endpoint: Optional[str] = None
+    azure_search_api_key: Optional[str] = None
+    azure_search_index_name: Optional[str] = None
     
-    # Azure Storage
-    azure_storage_connection_string: str
+    # Azure Storage (optional - can use Supabase Storage instead)
+    azure_storage_connection_string: Optional[str] = None
     azure_storage_container_name: str = "documents"
     
     # Azure AD (optional)
     azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
     azure_client_secret: Optional[str] = None
+    
+    # Supabase Configuration
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
+    supabase_service_key: Optional[str] = None
+    supabase_db_url: Optional[str] = None
+    supabase_storage_bucket: str = "documents"
+    
+    # Legacy Neon (deprecated - use Supabase)
+    neon_database_url: Optional[str] = None
     
     # Application
     api_v1_prefix: str = "/api"

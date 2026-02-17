@@ -41,6 +41,8 @@ export interface ChatResponse {
   response: string;
   sources: string[];
   conversation_id: string;
+  user_message_id?: string;
+  assistant_message_id?: string;
 }
 
 export interface Analytics {

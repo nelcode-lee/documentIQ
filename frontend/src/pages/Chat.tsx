@@ -89,12 +89,11 @@ const Chat = () => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    // Generate unique IDs for rating system
-    const userMessageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const assistantMessageId = `msg-${Date.now() + 1}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate temporary IDs (will be replaced with backend IDs after response)
+    const tempUserMessageId = `temp-${Date.now()}-user`;
 
     const userMessage: ChatMessageType = {
-      id: userMessageId,
+      id: tempUserMessageId,
       role: 'user',
       content: input.trim(),
       timestamp: new Date(),
@@ -104,19 +103,30 @@ const Chat = () => {
     setInput('');
     setIsLoading(true);
 
-           try {
-             // Debug: log the selected language
-             console.log('[DEBUG] Sending message with language:', selectedLanguage);
+    try {
+      // Debug: log the selected language
+      console.log('[DEBUG] Sending message with language:', selectedLanguage);
 
-             // For now, use non-streaming API (you can switch to streaming later)
-             const response = await chatService.sendMessage({
-               message: userMessage.content,
-               conversation_id: conversationId,
-               language: selectedLanguage,
-             });
+      // For now, use non-streaming API (you can switch to streaming later)
+      const response = await chatService.sendMessage({
+        message: userMessage.content,
+        conversation_id: conversationId,
+        language: selectedLanguage,
+      });
+
+      // Use backend-provided IDs for accurate feedback/rating submission
+      const actualUserMessageId = response.user_message_id || tempUserMessageId;
+      const actualAssistantMessageId = response.assistant_message_id || `msg-${Date.now()}-assistant`;
+
+      // Update the user message with the backend-provided ID
+      setMessages((prev) => prev.map(msg => 
+        msg.id === tempUserMessageId 
+          ? { ...msg, id: actualUserMessageId }
+          : msg
+      ));
 
       const assistantMessage: ChatMessageType = {
-        id: assistantMessageId,
+        id: actualAssistantMessageId,
         role: 'assistant',
         content: response.response,
         sources: response.sources,

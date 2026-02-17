@@ -4,6 +4,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 
+# Initialize Neon Database connection
+try:
+    from app.services.database import db_service
+    if db_service.is_connected:
+        print("[OK] Neon PostgreSQL database connected")
+    else:
+        print("[WARNING] Neon database not connected - using fallback storage")
+except Exception as e:
+    print(f"[WARNING] Could not initialize Neon database: {e}")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="DocumentIQ API",

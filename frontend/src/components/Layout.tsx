@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Menu, X, Globe } from 'lucide-react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { Language } from '../i18n/translations';
 
@@ -21,7 +21,6 @@ const Layout = () => {
   const navItems = [
     { path: '/chat', label: t.chat },
     { path: '/upload', label: t.upload },
-    { path: '/generate', label: t.generate },
     { path: '/documents', label: t.documents },
     { path: '/analytics', label: t.analytics },
   ];
@@ -29,45 +28,41 @@ const Layout = () => {
   const currentLanguage = languages.find(lang => lang.code === language) || languages[0];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo and Title - Horizontal Layout */}
+    <div className="min-h-screen bg-slate-50">
+      {/* Clean, professional header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            
+            {/* Logo and Brand */}
             <Link 
               to="/" 
-              className="flex items-center gap-3 flex-shrink-0 hover:opacity-80 transition-opacity group"
+              className="flex items-center gap-3 flex-shrink-0 group"
             >
               <img 
                 src="/CWK.L_BIG.png" 
-                alt="Cranswick Logo" 
-                className="h-8 sm:h-10 object-contain"
+                alt="Cranswick" 
+                className="h-7 sm:h-8 object-contain"
               />
-              <div className="flex flex-col justify-center">
-                <span className="text-sm sm:text-base font-bold text-gray-900 leading-tight">
-                  DocumentIQ
-                </span>
-                <span className="text-[10px] sm:text-xs text-gray-500 leading-tight hidden sm:block">
-                  Technical Standards
-                </span>
-              </div>
+              <div className="hidden sm:block h-6 w-px bg-slate-200" />
+              <span className="hidden sm:block text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
+                Technical Standards Agent
+              </span>
             </Link>
 
-            {/* Desktop Navigation and Language Selector */}
-            <div className="hidden md:flex items-center gap-1 lg:gap-2">
-              {/* Navigation Items */}
-              <div className="flex items-center gap-1">
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center">
+              <div className="flex items-center bg-slate-100 rounded-lg p-1">
                 {navItems.map((item) => {
                   const isActive = location.pathname === item.path;
-
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`px-3 lg:px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-150 ${
                         isActive
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       {item.label}
@@ -76,16 +71,15 @@ const Layout = () => {
                 })}
               </div>
 
-              {/* Language Selector */}
-              <div className="relative ml-2 lg:ml-4">
+              {/* Language Selector - Minimal */}
+              <div className="relative ml-4">
                 <button
                   onClick={() => setLanguageMenuOpen(!languageMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
                   aria-label="Select language"
                 >
-                  <Globe size={16} />
-                  <span className="hidden lg:inline">{currentLanguage.flag}</span>
-                  <span className="text-xs lg:text-sm">{currentLanguage.code.toUpperCase()}</span>
+                  <span className="text-base">{currentLanguage.flag}</span>
+                  <ChevronDown size={14} className={`transition-transform ${languageMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {languageMenuOpen && (
@@ -94,7 +88,7 @@ const Layout = () => {
                       className="fixed inset-0 z-10" 
                       onClick={() => setLanguageMenuOpen(false)}
                     />
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                    <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20">
                       {languages.map((lang) => (
                         <button
                           key={lang.code}
@@ -102,100 +96,102 @@ const Layout = () => {
                             setLanguage(lang.code);
                             setLanguageMenuOpen(false);
                           }}
-                          className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors ${
-                            language === lang.code ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 hover:bg-slate-50 transition-colors ${
+                            language === lang.code ? 'text-blue-600 font-medium bg-blue-50' : 'text-slate-700'
                           }`}
                         >
                           <span>{lang.flag}</span>
                           <span>{lang.name}</span>
-                          {language === lang.code && (
-                            <span className="ml-auto text-blue-600">✓</span>
-                          )}
                         </button>
                       ))}
                     </div>
                   </>
                 )}
               </div>
-            </div>
+            </nav>
 
-            {/* Mobile Menu Button */}
-            <div className="md:hidden flex items-center gap-2">
-              {/* Language selector for mobile */}
+            {/* Mobile Controls */}
+            <div className="md:hidden flex items-center gap-1">
+              {/* Mobile Language */}
               <button
-                onClick={() => setLanguageMenuOpen(!languageMenuOpen)}
-                className="p-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                onClick={() => {
+                  setLanguageMenuOpen(!languageMenuOpen);
+                  setMobileMenuOpen(false);
+                }}
+                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
                 aria-label="Select language"
               >
-                <Globe size={20} />
+                <span className="text-lg">{currentLanguage.flag}</span>
               </button>
               
+              {/* Mobile Menu Toggle */}
               <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                onClick={() => {
+                  setMobileMenuOpen(!mobileMenuOpen);
+                  setLanguageMenuOpen(false);
+                }}
+                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
                 aria-label="Toggle menu"
               >
-                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Mobile Navigation */}
-          {mobileMenuOpen && (
-            <div className="md:hidden pb-4 border-t border-gray-200 pt-4 mt-1">
-              <div className="flex flex-col space-y-1">
-                {navItems.map((item) => {
-                  const isActive = location.pathname === item.path;
-
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`px-4 py-3 rounded-lg text-base font-medium transition-colors ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Mobile Language Menu */}
-          {languageMenuOpen && (
-            <div className="md:hidden pb-4 border-t border-gray-200 pt-4 mt-1">
-              <div className="space-y-1">
-                {languages.map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => {
-                      setLanguage(lang.code);
-                      setLanguageMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center gap-3 transition-colors ${
-                      language === lang.code
-                        ? 'bg-blue-600 text-white font-medium'
-                        : 'text-gray-700 hover:bg-gray-100'
+        {/* Mobile Navigation Dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white">
+            <div className="px-4 py-3 space-y-1">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-xl">{lang.flag}</span>
-                    <span>{lang.name}</span>
-                    {language === lang.code && (
-                      <span className="ml-auto">✓</span>
-                    )}
-                  </button>
-                ))}
-              </div>
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
-          )}
-        </div>
-      </nav>
-      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
+          </div>
+        )}
+
+        {/* Mobile Language Dropdown */}
+        {languageMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white">
+            <div className="px-4 py-3 space-y-1">
+              {languages.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => {
+                    setLanguage(lang.code);
+                    setLanguageMenuOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center gap-3 transition-colors ${
+                    language === lang.code
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-lg">{lang.flag}</span>
+                  <span>{lang.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <Outlet />
       </main>
     </div>
