@@ -55,8 +55,22 @@ export const documentService = {
    * Get all documents
    */
   async getDocuments(): Promise<Document[]> {
-    const response = await apiClient.get<Document[]>('/api/documents');
-    return response.data;
+    console.log('[DocumentService] Fetching documents...');
+    try {
+      const response = await apiClient.get<Document[]>('/api/documents');
+      console.log('[DocumentService] Response status:', response.status);
+      console.log('[DocumentService] Documents count:', response.data?.length || 0);
+      console.log('[DocumentService] First doc:', response.data?.[0]);
+      return response.data || [];
+    } catch (error: unknown) {
+      console.error('[DocumentService] Error fetching documents:', error);
+      const axiosError = error as { response?: { status: number; data: unknown } };
+      if (axiosError.response) {
+        console.error('[DocumentService] Response status:', axiosError.response.status);
+        console.error('[DocumentService] Response data:', axiosError.response.data);
+      }
+      throw error;
+    }
   },
 
   /**
