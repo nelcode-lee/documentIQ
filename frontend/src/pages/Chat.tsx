@@ -180,12 +180,20 @@ const Chat = () => {
           }
         }
       }, 1000); // Wait 1 second for analytics to be processed
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error sending message:', error);
+      // Extract detailed error information for debugging
+      let errorDetail = 'Unknown error';
+      const axiosError = error as { response?: { status: number; data?: { detail?: string } }; message?: string };
+      if (axiosError.response) {
+        errorDetail = `Status ${axiosError.response.status}: ${axiosError.response.data?.detail || 'Server error'}`;
+      } else if (axiosError.message) {
+        errorDetail = axiosError.message;
+      }
       const errorMessage: ChatMessageType = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: t.error + ': Please try again or check if the backend is running.',
+        content: `${t.error}: ${errorDetail}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
