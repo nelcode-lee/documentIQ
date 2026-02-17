@@ -36,11 +36,12 @@ app = FastAPI(
     redirect_slashes=False  # Don't redirect /api/documents to /api/documents/
 )
 
-# Configure CORS
+# Configure CORS - allow all origins for now
+print(f"[CORS] Configured origins: {settings.cors_origins}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=False,  # Must be False when using "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
