@@ -1,7 +1,7 @@
 /** Principle Document Generator - Simplified version that leverages AI and existing documents */
 
 import { useState } from 'react';
-import { FileText, Download, Eye, Loader2, Search, BookOpen, CheckCircle, Sparkles, Info } from 'lucide-react';
+import { FileText, Download, Eye, Loader2, Search, BookOpen, Sparkles, Info } from 'lucide-react';
 import type { DocumentFormat } from '../types';
 import { generateService } from '../services/generateService';
 

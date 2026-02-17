@@ -394,7 +394,7 @@ const AnalyticsPage = () => {
                 dataKey="avgTime" 
                 fill="#3b82f6"
               >
-                {topQueriesData.slice(0, 15).map((entry, index) => (
+                {topQueriesData.slice(0, 15).map((_, index) => (
                   <Cell key={`cell-${index}`} fill="#3b82f6" />
                 ))}
               </Scatter>
@@ -434,7 +434,7 @@ const AnalyticsPage = () => {
                     fill="#3b82f6"
                     radius={[0, 4, 4, 0]}
                   >
-                    {topDocumentsData.map((entry, index) => {
+                    {topDocumentsData.map((_, index) => {
                       const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1', '#f97316', '#06b6d4'];
                       return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
                     })}
