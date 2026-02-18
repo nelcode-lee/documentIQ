@@ -855,8 +855,7 @@ async def update_document(
                         update_data["layer"] = layer
                     if document_tags:
                         update_data["tags"] = document_tags
-                    if sharepoint_url is not None:
-                        update_data["sharepoint_url"] = sharepoint_url
+                    # Note: sharepoint_url not supported in Supabase yet (column doesn't exist)
                     
                     if update_data:
                         # Update all chunks for this document
