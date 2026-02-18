@@ -829,91 +829,130 @@ async def update_document(
                 )
         else:
             # Update metadata only (no file replacement)
-            # This requires updating all chunks in Azure AI Search with new metadata
             try:
+                import json
+                
                 # Parse tags if provided
                 document_tags = []
                 if tags:
                     try:
-                        import json
                         document_tags = json.loads(tags)
                     except:
                         document_tags = [tag.strip() for tag in tags.split(',') if tag.strip()]
                 
                 vector_store = get_vector_store()
                 
-                # Search for all chunks of this document
-                search_client = vector_store.search_client
-                search_results = search_client.search(
-                    search_text="*",
-                    filter=f"documentId eq '{document_id}'",
-                    select=["id", "content", "contentVector", "chunkIndex", "metadata", "title", "category", "tags", "uploadedAt"]
-                )
-                
-                # Collect chunks to update
-                chunks_to_update = []
-                for result in search_results:
-                    # Parse existing metadata
-                    metadata_str = result.get("metadata")
-                    existing_metadata = {}
-                    if metadata_str:
-                        try:
-                            existing_metadata = json.loads(metadata_str) if isinstance(metadata_str, str) else metadata_str
-                        except:
-                            pass
+                # Check if using Supabase or Azure
+                if vector_store.use_supabase and vector_store.supabase_client:
+                    # Update metadata in Supabase
+                    update_data = {}
+                    if title is not None:
+                        update_data["title"] = title
+                    if category is not None:
+                        update_data["category"] = category
+                    if layer is not None:
+                        update_data["layer"] = layer
+                    if document_tags:
+                        update_data["tags"] = document_tags
                     
-                    # Determine updated values (use provided values or keep existing)
-                    updated_title = title if title is not None else result.get("title")
-                    updated_category = category if category is not None else result.get("category")
-                    updated_tags = document_tags if document_tags else (result.get("tags") or [])
-                    
-                    # Update layer if provided, otherwise keep existing
-                    updated_layer = layer if layer is not None else result.get("layer")
-                    if not updated_layer and existing_metadata.get("layer"):
-                        updated_layer = existing_metadata.get("layer")
-                    
-                    # Update document metadata
-                    updated_doc = {
-                        "id": result.get("id"),
-                        "documentId": document_id,
-                        "content": result.get("content"),
-                        "contentVector": result.get("contentVector"),
-                        "title": updated_title,
-                        "category": updated_category,
-                        "tags": updated_tags,
-                        "layer": updated_layer,  # Include updated layer
-                        "chunkIndex": result.get("chunkIndex"),
-                        "uploadedAt": result.get("uploadedAt"),
-                        "metadata": json.dumps({**existing_metadata, "updated_at": datetime.utcnow().isoformat()})
-                    }
-                    chunks_to_update.append(updated_doc)
-                
-                if chunks_to_update:
-                    # Update chunks in batch
-                    result = search_client.upload_documents(documents=chunks_to_update)
-                    success = all(r.succeeded for r in result)
-                    
-                    if success:
+                    if update_data:
+                        # Update all chunks for this document
+                        result = vector_store.supabase_client.table("document_chunks").update(
+                            update_data
+                        ).eq("document_id", document_id).execute()
+                        
+                        if result.data:
+                            return {
+                                "message": "Document metadata updated successfully",
+                                "status": "success",
+                                "id": document_id,
+                                "chunks_updated": len(result.data)
+                            }
+                        else:
+                            raise HTTPException(
+                                status_code=404,
+                                detail=f"Document {document_id} not found"
+                            )
+                    else:
                         return {
-                            "message": f"Document metadata updated successfully",
+                            "message": "No changes to update",
                             "status": "success",
-                            "id": document_id,
-                            "chunks_updated": len(chunks_to_update)
+                            "id": document_id
                         }
+                
+                elif vector_store.use_azure and vector_store.search_client:
+                    # Update in Azure AI Search
+                    search_client = vector_store.search_client
+                    search_results = search_client.search(
+                        search_text="*",
+                        filter=f"documentId eq '{document_id}'",
+                        select=["id", "content", "contentVector", "chunkIndex", "metadata", "title", "category", "tags", "uploadedAt"]
+                    )
+                    
+                    chunks_to_update = []
+                    for result in search_results:
+                        metadata_str = result.get("metadata")
+                        existing_metadata = {}
+                        if metadata_str:
+                            try:
+                                existing_metadata = json.loads(metadata_str) if isinstance(metadata_str, str) else metadata_str
+                            except:
+                                pass
+                        
+                        updated_title = title if title is not None else result.get("title")
+                        updated_category = category if category is not None else result.get("category")
+                        updated_tags = document_tags if document_tags else (result.get("tags") or [])
+                        updated_layer = layer if layer is not None else result.get("layer")
+                        if not updated_layer and existing_metadata.get("layer"):
+                            updated_layer = existing_metadata.get("layer")
+                        
+                        updated_doc = {
+                            "id": result.get("id"),
+                            "documentId": document_id,
+                            "content": result.get("content"),
+                            "contentVector": result.get("contentVector"),
+                            "title": updated_title,
+                            "category": updated_category,
+                            "tags": updated_tags,
+                            "layer": updated_layer,
+                            "chunkIndex": result.get("chunkIndex"),
+                            "uploadedAt": result.get("uploadedAt"),
+                            "metadata": json.dumps({**existing_metadata, "updated_at": datetime.utcnow().isoformat()})
+                        }
+                        chunks_to_update.append(updated_doc)
+                    
+                    if chunks_to_update:
+                        result = search_client.upload_documents(documents=chunks_to_update)
+                        success = all(r.succeeded for r in result)
+                        
+                        if success:
+                            return {
+                                "message": "Document metadata updated successfully",
+                                "status": "success",
+                                "id": document_id,
+                                "chunks_updated": len(chunks_to_update)
+                            }
+                        else:
+                            raise HTTPException(
+                                status_code=500,
+                                detail="Failed to update some document chunks"
+                            )
                     else:
                         raise HTTPException(
-                            status_code=500,
-                            detail="Failed to update some document chunks"
+                            status_code=404,
+                            detail=f"Document {document_id} not found"
                         )
                 else:
                     raise HTTPException(
-                        status_code=404,
-                        detail=f"Document {document_id} not found"
+                        status_code=500,
+                        detail="No vector store backend configured"
                     )
                     
             except HTTPException:
                 raise
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 raise HTTPException(
                     status_code=500,
                     detail=f"Error updating document metadata: {str(e)}"
