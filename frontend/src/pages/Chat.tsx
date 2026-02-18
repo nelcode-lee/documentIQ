@@ -188,7 +188,7 @@ const Chat = () => {
       const errorMessage: ChatMessageType = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `[v3] Error: ${errorDetail}`,
+        content: `Error: ${errorDetail}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
