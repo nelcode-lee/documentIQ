@@ -91,6 +91,7 @@ export const documentService = {
       category?: string;
       tags?: string[];
       layer?: DocumentLayer;
+      sharePointUrl?: string;
     }
   ): Promise<UploadResponse> {
     const formData = new FormData();
@@ -109,6 +110,9 @@ export const documentService = {
     }
     if (data.layer) {
       formData.append('layer', data.layer);
+    }
+    if (data.sharePointUrl) {
+      formData.append('sharepoint_url', data.sharePointUrl);
     }
 
     const response = await apiClient.put<UploadResponse>(

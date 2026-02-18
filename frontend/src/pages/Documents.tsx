@@ -44,6 +44,7 @@ const Documents = () => {
   const [updateCategory, setUpdateCategory] = useState('');
   const [updateTags, setUpdateTags] = useState('');
   const [updateLayer, setUpdateLayer] = useState<DocumentLayer | ''>('');
+  const [updateSharePointUrl, setUpdateSharePointUrl] = useState('');
 
   // Load documents
   useEffect(() => {
@@ -145,6 +146,8 @@ const Documents = () => {
     setUpdateTitle(doc.title);
     setUpdateCategory(doc.category || '');
     setUpdateTags(doc.tags?.join(', ') || '');
+    setUpdateLayer(doc.layer || '');
+    setUpdateSharePointUrl(doc.sharePointUrl || '');
     setUpdateFile(null);
   };
 
@@ -159,6 +162,7 @@ const Documents = () => {
         category: updateCategory || undefined,
         tags: updateTags ? updateTags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
         layer: updateLayer || undefined,
+        sharePointUrl: updateSharePointUrl || undefined,
       });
       
       // Reload documents
@@ -171,6 +175,7 @@ const Documents = () => {
       setUpdateCategory('');
       setUpdateTags('');
       setUpdateLayer('');
+      setUpdateSharePointUrl('');
     } catch (error) {
       console.error('Error updating document:', error);
       alert('Failed to update document. Please try again.');
@@ -683,6 +688,23 @@ const Documents = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="tag1, tag2, tag3"
                 />
+              </div>
+
+              {/* SharePoint URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Official Document Link (SharePoint URL)
+                </label>
+                <input
+                  type="url"
+                  value={updateSharePointUrl}
+                  onChange={(e) => setUpdateSharePointUrl(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://yourcompany.sharepoint.com/sites/..."
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Link to the official source document in SharePoint. A link icon will appear in the document list.
+                </p>
               </div>
 
               {/* File Replacement (Optional) */}

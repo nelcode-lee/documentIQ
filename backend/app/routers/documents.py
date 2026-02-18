@@ -725,6 +725,7 @@ async def update_document(
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     layer: Optional[str] = Form(None),  # 'policy' | 'principle' | 'sop'
+    sharepoint_url: Optional[str] = Form(None),  # Link to official SharePoint document
 ):
     """
     Update a document.
@@ -854,6 +855,8 @@ async def update_document(
                         update_data["layer"] = layer
                     if document_tags:
                         update_data["tags"] = document_tags
+                    if sharepoint_url is not None:
+                        update_data["sharepoint_url"] = sharepoint_url
                     
                     if update_data:
                         # Update all chunks for this document
@@ -906,6 +909,12 @@ async def update_document(
                         if not updated_layer and existing_metadata.get("layer"):
                             updated_layer = existing_metadata.get("layer")
                         
+                        # Handle SharePoint URL
+                        updated_sharepoint_url = sharepoint_url if sharepoint_url is not None else existing_metadata.get("sharePointUrl")
+                        updated_metadata = {**existing_metadata, "updated_at": datetime.utcnow().isoformat()}
+                        if updated_sharepoint_url:
+                            updated_metadata["sharePointUrl"] = updated_sharepoint_url
+                        
                         updated_doc = {
                             "id": result.get("id"),
                             "documentId": document_id,
@@ -917,7 +926,7 @@ async def update_document(
                             "layer": updated_layer,
                             "chunkIndex": result.get("chunkIndex"),
                             "uploadedAt": result.get("uploadedAt"),
-                            "metadata": json.dumps({**existing_metadata, "updated_at": datetime.utcnow().isoformat()})
+                            "metadata": json.dumps(updated_metadata)
                         }
                         chunks_to_update.append(updated_doc)
                     
