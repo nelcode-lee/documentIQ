@@ -857,7 +857,21 @@ async def update_document(
                         update_data["layer"] = layer
                     if document_tags:
                         update_data["tags"] = document_tags
-                    # Note: sharepoint_url not supported in Supabase yet (column doesn't exist)
+                    
+                    # Handle SharePoint URL - need to update metadata JSONB field
+                    if sharepoint_url is not None:
+                        # First, get current metadata
+                        current_doc = vector_store.supabase_client.table("documents").select(
+                            "metadata"
+                        ).eq("document_id", document_id).limit(1).execute()
+                        
+                        current_metadata = {}
+                        if current_doc.data and len(current_doc.data) > 0:
+                            current_metadata = current_doc.data[0].get("metadata") or {}
+                        
+                        # Update metadata with SharePoint URL
+                        current_metadata["sharePointUrl"] = sharepoint_url
+                        update_data["metadata"] = current_metadata
                     
                     if update_data:
                         # Update all chunks for this document
