@@ -861,7 +861,7 @@ async def update_document(
                     
                     if update_data:
                         # Update all chunks for this document
-                        result = vector_store.supabase_client.table("document_chunks").update(
+                        result = vector_store.supabase_client.table("documents").update(
                             update_data
                         ).eq("document_id", document_id).execute()
                         
