@@ -409,6 +409,7 @@ const Documents = () => {
       {/* Results Count */}
       <div className="mb-4 text-sm text-gray-600">
         Showing {filteredDocuments.length} of {documents.length} document(s)
+        <span className="ml-2 text-xs text-blue-500">[v4-list]</span>
       </div>
 
       {/* Documents List */}
