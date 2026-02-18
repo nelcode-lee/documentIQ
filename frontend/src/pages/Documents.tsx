@@ -34,7 +34,7 @@ const Documents = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [layerFilter, setLayerFilter] = useState<LayerFilter>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [sortBy, setSortBy] = useState<SortOption>('title');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -458,7 +458,7 @@ const Documents = () => {
         Showing {filteredDocuments.length} of {documents.length} document(s)
       </div>
 
-      {/* Documents Grid */}
+      {/* Documents List */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 size={32} className="animate-spin text-blue-600" />
@@ -474,170 +474,169 @@ const Documents = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {filteredDocuments.map((doc) => (
-            <div
-              key={doc.id}
-              className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-6 flex flex-col"
-            >
-              {/* Document Header */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div
-                    className={`p-2 rounded-lg flex-shrink-0 ${
-                      doc.source === 'uploaded'
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-green-100 text-green-600'
-                    }`}
-                  >
-                    {doc.source === 'uploaded' ? <Upload size={20} /> : <FileCheck size={20} />}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+          {/* List Header - Desktop only */}
+          <div className="hidden sm:grid sm:grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <div className="col-span-5">Document</div>
+            <div className="col-span-2">Layer</div>
+            <div className="col-span-2">Category</div>
+            <div className="col-span-1">Type</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
+
+          {/* Document List Items */}
+          <div className="divide-y divide-gray-100">
+            {filteredDocuments.map((doc) => (
+              <div
+                key={doc.id}
+                className="group hover:bg-blue-50/50 transition-colors"
+              >
+                {/* Mobile Layout */}
+                <div className="sm:hidden p-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedDocs.has(doc.id)}
+                      onChange={() => toggleSelect(doc.id)}
+                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                        <span className="font-medium text-gray-900 text-sm truncate">{doc.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                        {getLayerBadge(doc.layer)}
+                        {doc.category && <span className="text-gray-500">{doc.category}</span>}
+                        {doc.fileType && <span className="text-gray-400 uppercase">{doc.fileType}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2 flex-1">
+                  <div className="flex items-center gap-1 mt-2 ml-7">
+                    {doc.downloadUrl && (
+                      <>
+                        <button
+                          onClick={() => handleViewDocument(doc)}
+                          className="p-1.5 text-green-600 hover:bg-green-100 rounded"
+                          title="View"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => handleEdit(doc)}
+                      className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+                      title="Edit"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(doc.id, doc.title)}
+                      className="p-1.5 text-red-600 hover:bg-red-100 rounded"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    {doc.sharePointUrl && (
+                      <a
+                        href={doc.sharePointUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-green-600 hover:bg-green-100 rounded ml-auto"
+                        title="Open in SharePoint"
+                      >
+                        <Link2 size={16} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Desktop Layout */}
+                <div className="hidden sm:grid sm:grid-cols-12 gap-4 px-4 py-3 items-center">
+                  <div className="col-span-5 flex items-center gap-3 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedDocs.has(doc.id)}
+                      onChange={() => toggleSelect(doc.id)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <FileText size={18} className="text-gray-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 text-sm truncate" title={doc.title}>
                         {doc.title}
-                      </h3>
-                      {getLayerBadge(doc.layer)}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {getStatusBadge(doc.status)}
-                      {doc.source === 'generated' && doc.documentType && (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                          {doc.documentType.replace('-', ' ')}
-                        </span>
-                      )}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(doc.uploadedAt).toLocaleDateString()}
+                        {doc.author && ` • ${doc.author}`}
+                      </p>
                     </div>
                   </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={selectedDocs.has(doc.id)}
-                  onChange={() => toggleSelect(doc.id)}
-                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Document Metadata */}
-              <div className="space-y-2 mb-4 text-xs sm:text-sm text-gray-600">
-                {doc.category && (
-                  <div className="flex items-center gap-2">
-                    <Tag size={14} />
-                    <span>{doc.category}</span>
+                  <div className="col-span-2">
+                    {getLayerBadge(doc.layer)}
                   </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Calendar size={14} />
-                  <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
-                </div>
-                {doc.author && (
-                  <div className="flex items-center gap-2">
-                    <User size={14} />
-                    <span>{doc.author}</span>
+                  <div className="col-span-2">
+                    <span className="text-sm text-gray-600">{doc.category || '-'}</span>
                   </div>
-                )}
-                {doc.fileType && (
-                  <div className="flex items-center gap-2">
-                    <FileType size={14} />
-                    <span className="uppercase">{doc.fileType}</span>
-                    {doc.fileSize && <span className="text-gray-400">• {formatFileSize(doc.fileSize)}</span>}
+                  <div className="col-span-1">
+                    <span className="text-xs text-gray-500 uppercase">{doc.fileType || '-'}</span>
                   </div>
-                )}
-                {doc.version && (
-                  <div className="text-gray-500">
-                    Version {doc.version}
-                  </div>
-                )}
-              </div>
-
-              {/* Tags */}
-              {doc.tags && doc.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {doc.tags.slice(0, 3).map((tag, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                  {doc.tags.length > 3 && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
-                      +{doc.tags.length - 3}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Related Documents Indicator */}
-              {doc.relatedDocuments && doc.relatedDocuments.length > 0 && (
-                <div className="mb-4 p-2 bg-blue-50 rounded text-xs text-blue-700">
-                  <Link2 size={12} className="inline mr-1" />
-                  Linked to {doc.relatedDocuments.length} document(s)
-                </div>
-              )}
-
-              {/* SharePoint Link Indicator */}
-              {doc.sharePointUrl && (
-                <div className="mb-4 p-2 bg-green-50 rounded text-xs">
-                  <a
-                    href={doc.sharePointUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-700 hover:text-green-900 flex items-center gap-1"
-                  >
-                    <Link2 size={12} />
-                    <span className="underline">Open in SharePoint</span>
-                  </a>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="mt-auto pt-4 border-t border-gray-200 flex items-center gap-2">
-                {doc.downloadUrl && (
-                  <>
+                  <div className="col-span-2 flex items-center justify-end gap-1">
+                    {doc.sharePointUrl && (
+                      <a
+                        href={doc.sharePointUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-green-600 hover:bg-green-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Open in SharePoint"
+                      >
+                        <Link2 size={16} />
+                      </a>
+                    )}
+                    {doc.downloadUrl && (
+                      <>
+                        <button
+                          onClick={() => handleViewDocument(doc)}
+                          className="p-1.5 text-green-600 hover:bg-green-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="View"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </>
+                    )}
                     <button
-                      onClick={() => handleViewDocument(doc)}
-                      className="flex items-center gap-1 px-2 py-1.5 text-xs sm:text-sm text-green-600 hover:bg-green-50 rounded transition-colors flex-1 justify-center"
-                      title="View document"
+                      onClick={() => handleEdit(doc)}
+                      className="p-1.5 text-gray-600 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Edit"
                     >
-                      <Eye size={14} />
-                      <span className="hidden sm:inline">View</span>
+                      <Edit2 size={16} />
                     </button>
                     <button
-                      onClick={() => handleDownloadDocument(doc)}
-                      className="flex items-center gap-1 px-2 py-1.5 text-xs sm:text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors flex-1 justify-center"
-                      title="Download document"
+                      onClick={() => handleDelete(doc.id, doc.title)}
+                      className="p-1.5 text-red-600 hover:bg-red-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete"
                     >
-                      <Download size={14} />
-                      <span className="hidden sm:inline">Download</span>
+                      <Trash2 size={16} />
                     </button>
-                  </>
-                )}
-                <button
-                  onClick={() => handleEdit(doc)}
-                  className="flex items-center gap-1 px-2 py-1.5 text-xs sm:text-sm text-gray-600 hover:bg-gray-50 rounded transition-colors flex-1 justify-center"
-                  title="Edit document"
-                >
-                  <Edit2 size={14} />
-                  <span className="hidden sm:inline">Edit</span>
-                </button>
-                <button
-                  onClick={() => handleLinkDocuments(doc.id)}
-                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                  title="Link documents"
-                >
-                  <Link2 size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete(doc.id, doc.title)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                  title="Delete document"
-                >
-                  <Trash2 size={16} />
-                </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
