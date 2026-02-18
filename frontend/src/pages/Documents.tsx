@@ -13,7 +13,8 @@ import {
   X,
   Edit2,
   Save,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import type { Document, DocumentLayer } from '../types';
 import { documentService } from '../services/documentService';
