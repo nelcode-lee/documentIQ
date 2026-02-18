@@ -508,7 +508,7 @@ const Documents = () => {
                         href={doc.sharePointUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 text-green-600 hover:bg-green-100 rounded ml-auto"
+                        className="p-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded ml-auto"
                         title="Open in SharePoint"
                       >
                         <Link2 size={16} />
@@ -528,8 +528,11 @@ const Documents = () => {
                     />
                     <FileText size={18} className="text-gray-400 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate" title={doc.title}>
+                      <p className="font-medium text-gray-900 text-sm truncate flex items-center gap-1" title={doc.title}>
                         {doc.title}
+                        {doc.sharePointUrl && (
+                          <Link2 size={12} className="text-blue-500 flex-shrink-0" title="Has SharePoint link" />
+                        )}
                       </p>
                       <p className="text-xs text-gray-500">
                         {new Date(doc.uploadedAt).toLocaleDateString()}
@@ -552,10 +555,11 @@ const Documents = () => {
                         href={doc.sharePointUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 text-green-600 hover:bg-green-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Open in SharePoint"
+                        className="p-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded flex items-center gap-1"
+                        title="Open official document in SharePoint"
                       >
                         <Link2 size={16} />
+                        <span className="text-xs font-medium hidden lg:inline">SharePoint</span>
                       </a>
                     )}
                     {doc.downloadUrl && (
