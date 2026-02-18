@@ -9,14 +9,8 @@ import {
   Link2,
   Plus,
   Upload,
-  FileCheck,
-  AlertCircle,
   Loader2,
   X,
-  Tag,
-  Calendar,
-  User,
-  FileType,
   Edit2,
   Save,
   Download
@@ -184,14 +178,6 @@ const Documents = () => {
     }
   };
 
-  const handleLinkDocuments = (docId: string) => {
-    setLinkingDocId(docId);
-    setShowLinkDialog(true);
-    // Pre-populate SharePoint URL if document already has one
-    const doc = documents.find(d => d.id === docId);
-    setSharePointUrl(doc?.sharePointUrl || '');
-  };
-
   const handleSaveSharePointLink = async () => {
     if (!linkingDocId || !sharePointUrl.trim()) {
       alert('Please enter a valid SharePoint URL');
@@ -250,34 +236,6 @@ const Documents = () => {
     setSelectedDocs(newSelected);
   };
 
-  const getStatusBadge = (status: Document['status']) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <FileCheck size={12} />
-            Ready
-          </span>
-        );
-      case 'processing':
-        return (
-          <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            <Loader2 size={12} className="animate-spin" />
-            Processing
-          </span>
-        );
-      case 'error':
-        return (
-          <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            <AlertCircle size={12} />
-            Error
-          </span>
-        );
-      default:
-        return null;
-    }
-  };
-
   const getLayerBadge = (layer?: DocumentLayer) => {
     if (!layer) return null;
     
@@ -296,13 +254,6 @@ const Documents = () => {
         {config.label}
       </span>
     );
-  };
-
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return 'Unknown';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
