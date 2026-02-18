@@ -9,6 +9,7 @@ export interface UploadDocumentRequest {
   category?: string;
   tags?: string[];
   layer?: DocumentLayer; // 'policy' | 'principle' | 'sop'
+  sharePointUrl?: string;
 }
 
 export interface UploadResponse {
@@ -36,6 +37,9 @@ export const documentService = {
     }
     if (data.layer) {
       formData.append('layer', data.layer);
+    }
+    if (data.sharePointUrl) {
+      formData.append('sharepoint_url', data.sharePointUrl);
     }
 
     const response = await apiClient.post<UploadResponse>(

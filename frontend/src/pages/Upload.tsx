@@ -11,6 +11,7 @@ interface FileWithMetadata {
   category?: string;
   tags?: string[];
   layer?: DocumentLayer;
+  sharePointUrl?: string;
   status?: 'pending' | 'uploading' | 'success' | 'error';
   error?: string;
   progress?: number;
@@ -117,6 +118,7 @@ const Upload = () => {
         category: fileData.category,
         tags: fileData.tags?.filter((tag) => tag.trim() !== ''),
         layer: fileData.layer,
+        sharePointUrl: fileData.sharePointUrl,
       };
 
       await documentService.uploadDocument(uploadData);
@@ -332,6 +334,24 @@ const Upload = () => {
                       className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., safety, compliance, standards"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Official Document Link (SharePoint URL)
+                    </label>
+                    <input
+                      type="url"
+                      value={fileData.sharePointUrl || ''}
+                      onChange={(e) =>
+                        updateFileMetadata(index, { sharePointUrl: e.target.value })
+                      }
+                      className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="https://yourcompany.sharepoint.com/sites/..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Link to the official source document in SharePoint
+                    </p>
                   </div>
                 </div>
               )}

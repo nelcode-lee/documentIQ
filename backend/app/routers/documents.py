@@ -109,6 +109,7 @@ async def upload_document(
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     layer: Optional[str] = Form(None),  # 'policy' | 'principle' | 'sop'
+    sharepoint_url: Optional[str] = Form(None),  # Link to official SharePoint document
 ):
     """
     Upload and ingest a document.
@@ -184,7 +185,8 @@ async def upload_document(
                 tags=document_tags,
                 layer=document_layer,  # Pass auto-detected or provided layer
                 file_extension=file_extension,
-                original_filename=file.filename
+                original_filename=file.filename,
+                sharepoint_url=sharepoint_url,
             )
             
             return UploadResponse(
@@ -1092,7 +1094,8 @@ async def process_document_task(
     tags: List[str],
     layer: Optional[str],  # 'policy' | 'principle' | 'sop'
     file_extension: str,
-    original_filename: Optional[str]
+    original_filename: Optional[str],
+    sharepoint_url: Optional[str] = None,  # Link to official SharePoint document
 ):
     """
     Background task to process uploaded document.
@@ -1209,7 +1212,8 @@ async def process_document_task(
                     "blob_url": blob_url,
                     "original_filename": original_filename,
                     "source": "uploaded",
-                    "layer": layer  # Also store in metadata for backup
+                    "layer": layer,  # Also store in metadata for backup
+                    "sharePointUrl": sharepoint_url  # Link to official document
                 }
             }
             documents_to_index.append(chunk_dict)
