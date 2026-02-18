@@ -611,7 +611,7 @@ const Documents = () => {
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                 <Edit2 size={24} className="text-blue-600" />
-                Update Document
+                Update Document <span className="text-xs text-gray-400">[v5]</span>
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 Update document metadata or replace the file to keep information accurate
