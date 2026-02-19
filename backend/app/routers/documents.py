@@ -244,7 +244,7 @@ async def list_documents(layer: Optional[str] = None) -> List[DocumentResponse]:
                 
                 while True:
                     result = vector_store.supabase_client.table("documents").select(
-                        "document_id, title, category, tags, metadata, created_at, chunk_index"
+                        "document_id, title, category, tags, metadata, created_at, chunk_index, sharepoint_url"
                     ).range(offset, offset + page_size - 1).execute()
                     
                     if not result.data:
@@ -279,7 +279,7 @@ async def list_documents(layer: Optional[str] = None) -> List[DocumentResponse]:
                             "status": "completed",
                             "source": "uploaded",
                             "metadata": metadata,
-                            "sharePointUrl": metadata.get("sharePointUrl")
+                            "sharePointUrl": row.get("sharepoint_url") or metadata.get("sharePointUrl")
                         }
                     
                     # If we got fewer rows than page_size, we've reached the end
@@ -857,21 +857,8 @@ async def update_document(
                         update_data["layer"] = layer
                     if document_tags:
                         update_data["tags"] = document_tags
-                    
-                    # Handle SharePoint URL - need to update metadata JSONB field
                     if sharepoint_url is not None:
-                        # First, get current metadata
-                        current_doc = vector_store.supabase_client.table("documents").select(
-                            "metadata"
-                        ).eq("document_id", document_id).limit(1).execute()
-                        
-                        current_metadata = {}
-                        if current_doc.data and len(current_doc.data) > 0:
-                            current_metadata = current_doc.data[0].get("metadata") or {}
-                        
-                        # Update metadata with SharePoint URL
-                        current_metadata["sharePointUrl"] = sharepoint_url
-                        update_data["metadata"] = current_metadata
+                        update_data["sharepoint_url"] = sharepoint_url
                     
                     if update_data:
                         # Update all chunks for this document
